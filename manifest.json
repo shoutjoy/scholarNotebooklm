@@ -1,0 +1,85 @@
+{
+  "manifest_version": 3,
+  "name": "학술도구 어시스턴트 by박중희",
+  "version": "1.3",
+  "description": "NotebookLM과 연동한 학술 문서 분석, 슬라이드/학습용 프롬프트 생성 및 스크랩 관리",
+  "permissions": [
+    "clipboardWrite",
+    "clipboardRead",
+    "storage",
+    "tabs",
+    "windows"
+  ],
+  "host_permissions": [
+    "https://notebooklm.google.com/*",
+    "https://mdproviewer.vercel.app/*",
+    "https://scholarslide.vercel.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "action-popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "학술도구 어시스턴트 — 앱 켜기/끄기"
+  },
+  "icons": {
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup.html",
+        "popup.js",
+        "prompts/prompts.html",
+        "prompts/prompts.js",
+        "vieweditor/view-scrap.html",
+        "vieweditor/view-scrap.js",
+        "vieweditor/view-accumulated.html",
+        "vieweditor/view-accumulated.js",
+        "vieweditor/index.html",
+        "vieweditor/app.js",
+        "vieweditor/lib/marked.min.js",
+        "vieweditor/lib/lucide.min.js",
+        "confirm/confirm.js"
+      ],
+      "matches": [
+        "https://notebooklm.google.com/*"
+      ]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://notebooklm.google.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://mdproviewer.vercel.app/*"
+      ],
+      "js": [
+        "paste/mdproviewer-paste.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://scholarslide.vercel.app/*"
+      ],
+      "js": [
+        "paste/scholarslide-paste.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

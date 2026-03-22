@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스크랩 보기 에디터 - Scholar Assistant</title>
+    <script src="./lib/marked.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { margin: 0; height: 100%; font-family: "Segoe UI", "Malgun Gothic", sans-serif; }
+        body { background: #0f172a; color: #e2e8f0; display: flex; flex-direction: column; }
+        .header {
+            padding: 12px 16px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+        .header h3 { margin: 0; font-size: 14px; }
+        .header-actions { display: flex; gap: 8px; }
+        .font-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 8px;
+            border-radius: 8px;
+            background: #162033;
+            border: 1px solid #334155;
+        }
+        .font-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #94a3b8;
+        }
+        .font-value {
+            min-width: 40px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+        .btn-close, .btn-save, .btn-mode, .btn-tool, .btn-download, .btn-tomd {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .btn-close { background: #475569; color: #e2e8f0; }
+        .btn-close:hover { background: #64748b; }
+        .btn-save { background: #2563eb; color: #fff; }
+        .btn-save:hover { background: #1d4ed8; }
+        .toolbar {
+            padding: 10px 16px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            border-bottom: 1px solid #334155;
+            background: #162033;
+            flex-shrink: 0;
+        }
+        .btn-tool {
+            background: #334155;
+            color: #e2e8f0;
+            min-width: 44px;
+        }
+        .btn-tool:hover { background: #475569; }
+        .content {
+            --editor-width: 58%;
+            flex: 1;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(320px, var(--editor-width)) 8px minmax(320px, 1fr);
+            overflow: hidden;
+        }
+        .content.preview-hidden {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .content.preview-hidden #previewPanel,
+        .content.preview-hidden #contentSplitter {
+            display: none;
+        }
+        .panel {
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .panel-title {
+            padding: 10px 14px;
+            border-bottom: 1px solid #334155;
+            background: #162033;
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .panel-title.preview-handle {
+            cursor: col-resize;
+            user-select: none;
+        }
+        .panel-title.preview-handle:hover {
+            background: #1b2a44;
+            color: #cbd5e1;
+        }
+        .splitter {
+            width: 8px;
+            cursor: col-resize;
+            background: #1b2435;
+            border-left: 1px solid #23324b;
+            border-right: 1px solid #23324b;
+        }
+        .splitter:hover, .splitter.dragging {
+            background: #2563eb;
+        }
+        .scrap-edit-textarea {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            resize: none;
+            border: none;
+            outline: none;
+            padding: 16px;
+            font-family: inherit;
+            font-size: var(--editor-font-size, 13px);
+            line-height: 1.7;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        .preview-wrap {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+            padding: 18px;
+            background: #f8fafc;
+            color: #0f172a;
+            font-size: var(--preview-font-size, 15px);
+            line-height: 1.75;
+        }
+        .preview-wrap h1, .preview-wrap h2, .preview-wrap h3 { margin-top: 1.3em; }
+        .preview-wrap table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+        .preview-wrap th, .preview-wrap td { border: 1px solid #cbd5e1; padding: 6px 8px; }
+        .preview-wrap blockquote {
+            margin: 12px 0;
+            padding: 8px 12px;
+            border-left: 4px solid #2563eb;
+            background: #e0e7ff;
+            color: #334155;
+        }
+        .footer {
+            padding: 12px 16px;
+            border-top: 1px solid #334155;
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .footer button {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 11px;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-download { background: #334155; color: #fff; }
+        .btn-download:hover { background: #475569; }
+        .btn-mode { background: #0f766e; color: #fff; }
+        .btn-mode:hover { background: #115e59; }
+        .btn-tomd { background: #ea580c; color: #fff; }
+        .btn-tomd:hover { background: #c2410c; }
+        .msg-toast {
+            position: fixed;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            z-index: 200;
+            background: #1e293b;
+            color: #e2e8f0;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .msg-toast.show { opacity: 1; }
+        @media (max-width: 900px) {
+            .content {
+                --editor-width: 54%;
+                grid-template-columns: minmax(220px, var(--editor-width)) 6px minmax(220px, 1fr);
+            }
+            .splitter { width: 6px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h3>스크랩 보기 에디터</h3>
+        <div class="header-actions">
+            <div class="font-controls">
+                <span class="font-label">폰트</span>
+                <button class="btn-tool" id="btnFontDown" type="button">A-</button>
+                <span class="font-value" id="fontSizeValue">13px</span>
+                <button class="btn-tool" id="btnFontUp" type="button">A+</button>
+            </div>
+            <button class="btn-save" id="btnSaveInternal">저장</button>
+            <button class="btn-close" id="btnClose">닫기</button>
+        </div>
+    </div>
+    <div class="toolbar">
+        <button class="btn-tool" data-action="bold"><strong>B</strong></button>
+        <button class="btn-tool" data-action="italic"><em>I</em></button>
+        <button class="btn-tool" data-action="h1">H1</button>
+        <button class="btn-tool" data-action="h2">H2</button>
+        <button class="btn-tool" data-action="h3">H3</button>
+        <button class="btn-tool" data-action="olist">item_Num</button>
+        <button class="btn-tool" data-action="ulist">item_Dot</button>
+        <button class="btn-tool" data-action="table">Table</button>
+        <button class="btn-tool" data-action="link">URL</button>
+        <button class="btn-tool" data-action="image">Image</button>
+        <button class="btn-tool" data-action="br">BR</button>
+    </div>
+    <div class="content preview-hidden" id="contentLayout">
+        <section class="panel">
+            <div class="panel-title">Editor</div>
+            <textarea id="scrapEditArea" class="scrap-edit-textarea" placeholder="스크랩 내용이 없습니다. 스크랩 버튼으로 NotebookLM 내용을 가져오세요."></textarea>
+        </section>
+        <div class="splitter" id="contentSplitter" aria-hidden="true"></div>
+        <section class="panel" id="previewPanel">
+            <div class="panel-title preview-handle" id="previewTitle">MD 보기 크기 조절</div>
+            <div id="previewArea" class="preview-wrap"></div>
+        </section>
+    </div>
+    <div class="footer">
+        <button class="btn-download" id="btnSaveTxt">TXT 저장</button>
+        <button class="btn-download" id="btnSaveMd">MD 저장</button>
+        <button class="btn-mode" id="btnTogglePreview">MD 보기</button>
+        <button class="btn-tomd" id="btnToMD">ToMD로 보내기</button>
+    </div>
+    <div id="message-box" class="msg-toast">메시지</div>
+    <script src="../confirm/confirm.js"></script>
+<script src="./view-scrap.js"></script>
+</body>
+</html>

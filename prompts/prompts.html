@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saved Prompts - Scholar Assistant</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; }
+    .aside { width: 256px; flex-shrink: 0; background: #1e293b; border-right: 1px solid #334155; padding: 24px; display: flex; flex-direction: column; }
+    .aside h2 { font-size: 18px; font-weight: 700; margin: 0 0 24px 0; }
+    .aside-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .btn-icon { width: 32px; height: 32px; padding: 0; border: none; background: #334155; color: #94a3b8; border-radius: 6px; cursor: pointer; font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+    .btn-icon:hover { background: #475569; color: #e2e8f0; }
+    .card-actions-wrap { position: relative; }
+    .folder-list { flex: 1; overflow-y: auto; }
+    .folder-item { display: flex; align-items: center; margin-bottom: 4px; }
+    .folder-btn { flex: 1; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: none; background: transparent; color: #94a3b8; border-radius: 8px; cursor: pointer; font-size: 14px; text-align: left; }
+    .folder-btn:hover { background: rgba(255,255,255,0.05); }
+    .folder-btn.active { background: rgba(96,165,250,0.15); color: #60a5fa; }
+    .folder-actions-wrap { position: relative; opacity: 0.6; }
+    .folder-item:hover .folder-actions-wrap { opacity: 1; }
+    .btn-folder-more { background: none; border: none; padding: 4px; cursor: pointer; color: #94a3b8; font-size: 14px; }
+    .btn-folder-more:hover { color: #e2e8f0; }
+    .folder-dropdown { position: absolute; top: 100%; right: 0; margin-top: 4px; display: none; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 4px; min-width: 100px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 50; }
+    .folder-dropdown.show { display: block; }
+    .folder-dropdown button { padding: 8px 12px; border: none; background: none; color: #e2e8f0; cursor: pointer; font-size: 13px; width: 100%; text-align: left; border-radius: 4px; }
+    .folder-dropdown button:hover { background: #334155; }
+    .folder-dropdown button.del { color: #e11d48; }
+    .folder-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+    .folder-name { flex: 1; }
+    .folder-count { font-size: 10px; color: #64748b; font-weight: 700; }
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #0f172a; }
+    .main-header { padding: 32px 32px 16px; border-bottom: 1px solid #334155; }
+    .main-header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .main-header h1 { font-size: 24px; font-weight: 700; margin: 0 0 4px 0; }
+    .main-header .sub { font-size: 12px; color: #64748b; }
+    .search-wrap { position: relative; margin-bottom: 16px; }
+    .search-wrap input { width: 100%; padding: 12px 16px 12px 40px; background: #1e293b; border: 1px solid #475569; border-radius: 12px; color: #e2e8f0; font-size: 14px; outline: none; }
+    .search-wrap input:focus { border-color: #60a5fa; }
+    .search-wrap::before { content: '🔍'; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn { padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #334155; color: #94a3b8; }
+    .btn-secondary:hover { background: #475569; color: #e2e8f0; }
+    .prompts-grid { flex: 1; overflow-y: auto; padding: 24px 32px; }
+    .prompt-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 12px; cursor: pointer; }
+    .prompt-card:hover { background: #334155; }
+    .prompt-card h4 { font-size: 15px; font-weight: 700; margin: 0 0 8px 0; color: #e2e8f0; cursor: pointer; }
+    .prompt-card:hover h4 { color: #fff; }
+    .prompt-card .preview { font-size: 12px; color: #64748b; margin-top: 8px; line-height: 1.5; }
+    .prompt-card .tags { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag { padding: 4px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 999px; font-size: 10px; color: #94a3b8; }
+    .btn-fav, .btn-view, .btn-more { background: none; border: none; padding: 4px; cursor: pointer; color: #94a3b8; font-size: 14px; }
+    .btn-fav:hover { color: #fbbf24; }
+    .btn-fav.fav { color: #fbbf24; }
+    .btn-view:hover { color: #60a5fa; }
+    .btn-more:hover { color: #e2e8f0; }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .card-actions { display: flex; gap: 8px; align-items: center; opacity: 0.7; }
+    .prompt-card:hover .card-actions { opacity: 1; }
+    .dropdown-menu { position: absolute; top: 100%; right: 0; margin-top: 4px; display: none; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 4px; min-width: 100px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 50; }
+    .dropdown-menu.show { display: block; }
+    .dropdown-menu button { padding: 8px 12px; border: none; background: none; color: #e2e8f0; cursor: pointer; font-size: 13px; width: 100%; text-align: left; border-radius: 4px; }
+    .dropdown-menu button:hover { background: #334155; }
+    .dropdown-menu button.del { color: #e11d48; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 60; display: none; align-items: center; justify-content: center; }
+    .modal-overlay.show { display: flex; }
+    .modal-box { background: #1e293b; width: 400px; max-width: 90vw; border-radius: 12px; padding: 32px; border: 1px solid #334155; }
+    .modal-box.lg { width: 100%; max-width: 672px; }
+    .modal-box.xl { width: 100%; max-width: 720px; max-height: 85vh; }
+    .modal-box h3 { font-size: 20px; font-weight: 700; margin: 0 0 24px 0; color: #e2e8f0; }
+    .modal-box label { display: block; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .modal-box input, .modal-box select, .modal-box textarea { width: 100%; padding: 16px; background: #0f172a; border: 1px solid #475569; border-radius: 8px; color: #e2e8f0; font-size: 14px; outline: none; margin-bottom: 24px; }
+    .modal-box input:focus, .modal-box textarea:focus { border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(96,165,250,0.3); }
+    .modal-box textarea { min-height: 200px; resize: vertical; font-family: monospace; }
+    .modal-row { display: flex; gap: 12px; margin-top: 16px; }
+    .modal-row .btn { flex: 1; }
+    .btn-cancel { background: rgba(255,255,255,0.05); color: #d1d5db; }
+    .btn-cancel:hover { background: rgba(255,255,255,0.1); }
+    .btn-create { background: #2563eb; color: #fff; }
+    .btn-create:hover { background: #1d4ed8; }
+    .btn-save { background: #16a34a; color: #fff; }
+    .btn-save:hover { background: #15803d; }
+    .view-content { padding: 16px; background: #0f172a; border: 1px solid #475569; border-radius: 8px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+    /* 프롬프트 보기: 본문만 스크롤, 입력/입력실행/복사는 항상 하단 고정 */
+    #view-prompt-modal.modal-overlay {
+      padding: 12px;
+      box-sizing: border-box;
+      align-items: center;
+      justify-content: center;
+    }
+    #view-prompt-modal .modal-box.xl {
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      max-height: min(85vh, calc(100vh - 24px));
+      min-height: 0;
+      overflow: hidden;
+    }
+    #view-prompt-modal .modal-header {
+      flex-shrink: 0;
+    }
+    #view-prompt-modal .modal-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 16px 24px 8px;
+    }
+    #view-prompt-modal .view-content {
+      flex: 1 1 auto;
+      min-height: 100px;
+      max-height: none;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    #view-prompt-modal .modal-footer-view {
+      flex-shrink: 0;
+      display: flex;
+      gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid #334155;
+      justify-content: flex-end;
+      background: #1e293b;
+    }
+    .color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 24px; }
+    .color-btn { width: 40px; height: 40px; border-radius: 12px; border: none; cursor: pointer; }
+    .color-btn:hover { transform: scale(1.05); }
+    .color-btn.selected { outline: 4px solid #3b82f6; outline-offset: 2px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 24px; border-bottom: 1px solid #334155; }
+    .modal-body { padding: 32px; }
+    .msg-toast { position: fixed; top: 40px; left: 50%; transform: translateX(-50%); padding: 12px 24px; background: #1e293b; color: #e2e8f0; border-radius: 999px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+    .msg-toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <aside class="aside">
+    <div class="aside-header">
+      <h2>Folders</h2>
+      <button id="btnCreateFolder" class="btn-icon" title="폴더 만들기">+</button>
+    </div>
+    <nav id="folder-list" class="folder-list"></nav>
+  </aside>
+
+  <main class="main">
+    <header class="main-header">
+      <div class="main-header-top">
+        <div>
+          <h1>Customize Your Prompts</h1>
+          <p class="sub">당신이 만든 프롬프트를 관리하세요.</p>
+        </div>
+        <div class="header-actions">
+          <button id="btnImportNpp" class="btn btn-secondary" type="button" title=".npp Export">Prompt Open</button>
+          <button id="btnExportNpp" class="btn btn-secondary" type="button" title=".npp Import">Prompt Save</button>
+          <button id="btnClose" class="btn-icon" title="Close">X</button>
+        </div>
+      </div>
+      <div class="search-wrap">
+        <input id="searchInput" type="text" placeholder="Search prompts...">
+      </div>
+      <div class="btn-row">
+        <button id="btnTags" class="btn btn-secondary">🏷 Tags</button>
+        <button id="btnFavorites" class="btn btn-secondary">★ Favorites</button>
+        <button id="btnNewPrompt" class="btn btn-primary">+ Add New Prompt</button>
+      </div>
+    </header>
+    <div id="prompts-grid" class="prompts-grid"></div>
+  </main>
+
+  <div id="create-folder-modal" class="modal-overlay">
+    <div class="modal-box">
+      <h3>Create Folder</h3>
+      <label>Folder Name</label>
+      <input id="newFolderName" type="text" placeholder="Folder name">
+      <label>Folder Color</label>
+      <div class="color-grid" id="color-grid"></div>
+      <div class="modal-row">
+        <button id="btnCancelFolder" class="btn btn-cancel">Cancel</button>
+        <button id="btnCreateFolderConfirm" class="btn btn-create">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="add-prompt-modal" class="modal-overlay">
+    <div class="modal-box lg">
+      <div class="modal-header">
+        <h3 id="addPromptModalTitle">Add New Prompt</h3>
+        <button id="btnCloseAddPrompt" class="btn-icon">×</button>
+      </div>
+      <div class="modal-body">
+        <label>Title (required)</label>
+        <input id="newPromptTitle" type="text" placeholder="Title (required)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            <label>Folder</label>
+            <select id="newPromptFolder"></select>
+          </div>
+          <div>
+            <label>Tags (comma separated)</label>
+            <input id="newPromptTags" type="text" placeholder="Tags (comma separated)">
+          </div>
+        </div>
+        <label>Prompt content</label>
+        <textarea id="newPromptContent" placeholder="Prompt content..."></textarea>
+        <div class="modal-row">
+          <button id="btnCancelAddPrompt" class="btn btn-cancel">Cancel</button>
+          <button id="btnSaveNewPrompt" class="btn btn-save">+ Add New Prompt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="edit-folder-modal" class="modal-overlay">
+    <div class="modal-box">
+      <h3>폴더 편집</h3>
+      <label>Folder Name</label>
+      <input id="editFolderName" type="text" placeholder="Folder name">
+      <label>Folder Color</label>
+      <div class="color-grid" id="editColorGrid"></div>
+      <div class="modal-row">
+        <button id="btnCancelEditFolder" class="btn btn-cancel">취소</button>
+        <button id="btnSaveEditFolder" class="btn btn-create">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-prompt-modal" class="modal-overlay">
+    <div class="modal-box xl">
+      <div class="modal-header">
+        <h3 id="viewPromptTitle">프롬프트 보기</h3>
+        <button id="btnCloseViewPrompt" class="btn-icon">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="viewPromptContent" class="view-content"></div>
+      </div>
+      <div class="modal-footer modal-footer-view">
+        <button id="btnInputOnly" class="btn btn-secondary" title="노트북LM 프롬프트에 입력만">입력</button>
+        <button id="btnApplyToNotebookLM" class="btn" style="background:#fff;color:#0f172a;" title="노트북LM 프롬프트에 넣고 실행">입력실행</button>
+        <button id="btnCopyPrompt" class="btn btn-primary" title="클립보드 복사">복사</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="message-box" class="msg-toast"><span id="message-text">메시지</span></div>
+
+  <input id="nppFileInput" type="file" accept=".npp,application/json" hidden>
+
+  <script src="./prompts.js"></script>
+</body>
+</html>
+

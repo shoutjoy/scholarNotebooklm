@@ -1,0 +1,27 @@
+﻿{
+  "files.encoding": "utf8",
+  "files.autoGuessEncoding": false,
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  "files.trimTrailingWhitespace": false,
+  "terminal.integrated.defaultProfile.windows": "UTF-8 PowerShell",
+  "terminal.integrated.profiles.windows": {
+    "UTF-8 PowerShell": {
+      "path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "args": [
+        "-NoExit",
+        "-Command",
+        "[Console]::InputEncoding = [System.Text.UTF8Encoding]::new(); [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); $OutputEncoding = [System.Text.UTF8Encoding]::new()"
+      ]
+    }
+  },
+  "terminal.integrated.env.windows": {
+    "PYTHONUTF8": "1",
+    "PYTHONIOENCODING": "utf-8"
+  },
+  "[powershell]": {
+    "files.encoding": "utf8",
+    "files.eol": "\r\n"
+  }
+}

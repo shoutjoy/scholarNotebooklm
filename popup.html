@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research assistant</title>
+        <link rel="stylesheet" href="./popup.css">
+
+</head>
+
+<body data-theme="dark">
+    <div class="popup-container">
+        <div class="header">
+            <div class="header-left">
+                <div class="header-icon">S</div>
+                <div>
+                    <h1 style="font-size:1.0rem;">Research Assistant V <span id="extManifestVersion"></span></h1>
+                    <span class="header-sub">Park Joonghee prof.</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <label
+                    style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;user-select:none;flex-shrink:0;line-height:1.4;">
+                    <input type="checkbox" id="chkImmediate" checked style="vertical-align:middle;">
+                    <span>즉시실행</span>
+                </label>
+                <button class="btn-prompts" data-action="openModal" data-arg="settings-modal" title="?ㅼ젙"
+                    style="padding: 0.4rem 0.5rem; font-size: 1rem; line-height: 1;">Setting</button>
+                <button class="btn-prompts" data-action="openPromptsWindow" title="??λ맂 ?꾨＼?꾪듃">prompts</button>
+                <button class="theme-toggle" id="themeToggle" data-action="toggleTheme" title="?쇱씠???ㅽ겕 紐⑤뱶 ?꾪솚">
+                    <span id="themeIcon">D|L</span>
+                    <span id="themeLabel">Switch</span>
+                </button>
+            </div>
+        </div>
+                <div class="main">
+            <div class="left-panel">
+                <div class="left-panel-rail" aria-label="프롬프트 단축">
+                    <button type="button" class="rail-btn rail-btn-slide" data-action="generateSlidePrompt" data-arg="1" title="STEP 01 지식 지도">1</button>
+                    <button type="button" class="rail-btn rail-btn-slide" data-action="generateSlidePrompt" data-arg="2" title="STEP 02 재귀적 상세 추출">2</button>
+                    <button type="button" class="rail-btn rail-btn-slide" data-action="generateSlidePrompt" data-arg="3" title="STEP 03 디자인 일관성">3</button>
+                    <button type="button" class="rail-btn rail-btn-explore" data-action="setExplorePrompt" data-arg="step1" title="STEP 1: 지식의 지도">S1</button>
+                    <button type="button" class="rail-btn rail-btn-explore" data-action="setExplorePrompt" data-arg="step2" title="STEP 2: 핵심 개념 딥다이빙">S2</button>
+                    <button type="button" class="rail-btn rail-btn-explore rail-btn-tight" data-action="setExplorePrompt" data-arg="step2_2" title="STEP 2.2: DETAIL ORDER">S2.2</button>
+                    <button type="button" class="rail-btn rail-btn-explore" data-action="setExplorePrompt" data-arg="step3" title="STEP 3: 현실 세계 적용">S3</button>
+                    <button type="button" class="rail-btn rail-btn-explore" data-action="setExplorePrompt" data-arg="step4" title="STEP 4: 데이터 해석">S4</button>
+                    <button type="button" class="rail-btn rail-btn-explore" data-action="setExplorePrompt" data-arg="step5" title="STEP 5: 셀프 테스트">S5</button>
+                </div>
+                <div class="left-panel-full">
+                <div class="section-title blue">Slide Tools</div>
+                <div class="input-row">
+                    <div class="num-group"><span style="font-size:0.9rem">Total</span>
+                        <input type="number" id="slideTotal" value="45"></div>
+                    <div class="num-group"><span style="font-size:0.9rem">part</span>
+                        <input type="number" id="slidePart" value="3"></div>
+                </div>
+                <button class="btn-step blue" data-action="generateSlidePrompt" data-arg="1">STEP 01 지식 지도</button>
+                <div class="input-row" style="flex-wrap:wrap">
+                    <div class="num-group"><span style="font-size:0.9rem">From</span><input type="number" id="slideFrom" value="1"></div>
+                    <div class="num-group"><span style="font-size:0.9rem">To</span><input type="number" id="slideTo" value="15"></div>
+                    <div style="display:flex;gap:3px;margin-left:8px;align-items:center">
+                        <button type="button" class="btn-range" id="btnRangePrev" title="이전 구간">−</button>
+                        <button type="button" class="btn-range" id="btnRangeNext" title="다음 구간">+</button>
+                    </div>
+                </div>
+                <button class="btn-step" data-action="generateSlidePrompt" data-arg="2">STEP 02 재귀적 상세 추출</button>
+                <button class="btn-step" data-action="generateSlidePrompt" data-arg="3">STEP 03 디자인 일관성</button>
+                <div class="section-title purple" style="margin-top:12px">Scholar Explore</div>
+                <div class="explore-item" data-action="setExplorePrompt" data-arg="step1">STEP 1: 지식의 지도</div>
+                <div class="explore-item" data-action="setExplorePrompt" data-arg="step2">STEP 2: 핵심 개념 딥다이빙</div>
+                <div class="explore-item" data-action="setExplorePrompt" data-arg="step2_2">STEP 2.2: DETAIL ORDER</div>
+                <div class="explore-item" data-action="setExplorePrompt" data-arg="step3">STEP 3: 현실 세계 적용</div>
+                <div class="explore-item" data-action="setExplorePrompt" data-arg="step4">STEP 4: 데이터 해석</div>
+                <div class="explore-item" data-action="setExplorePrompt" data-arg="step5">STEP 5: 셀프 테스트</div>
+                </div>
+            </div>
+            <div class="panel-splitter" id="panelSplitter" title="드래그하여 좌우 폭 조절"></div>
+            <div class="right-panel">
+                <div class="prompt-label">Prompts Input</div>
+                <textarea id="promptInput" placeholder="프롬프트 입력창... NotebookLM에 붙여넣을 내용"></textarea>
+                <button class="btn-execute" data-action="copyMainPrompt">입 력 실 행</button>
+                <button class="btn-clear-input" data-action="clearNotebookLMInput" title="NotebookLM 입력창 내용 지우기">입력창 지우기</button>
+                <button class="btn-scrap" data-action="initiateScrap">스 크 랩</button>
+                <div class="btn-grid">
+                    <button class="btn-action" data-action="openViewScrapWindow">보기</button>
+                    <button class="btn-action orange" data-action="sendToMD">ToMD</button>
+                </div>
+                <div class="section-title blue" style="margin-top:12px">누적 스크랩</div>
+                <div class="btn-grid">
+                    <button class="btn-action" data-action="openViewAccumulatedWindow">누적보기</button>
+                    <button class="btn-action orange" data-action="sendAccumulatedToMD">누적 ToMD</button>
+                </div>
+                <div class="btn-footer">
+                    <button class="btn-action btn-save" data-action="saveCurrentScrap">대화저장</button>
+                    <button class="btn-action" data-action="openViewScrapWindow">보기</button>
+                    <button class="btn-action orange" data-action="sendToMD">ToMD</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-scrap-modal" class="modal-overlay">
+        <div class="modal modal-draggable" id="view-scrap-modal-box" style="width:780px;height:900px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
+            <div class="modal-header modal-drag-handle" style="cursor:move;user-select:none">
+                <h3>스크랩 내용 보기</h3>
+                <button class="btn-close" data-action="closeModal" data-arg="view-scrap-modal">닫기</button>
+            </div>
+            <div class="modal-body" id="scrap-display-container" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;padding:0">
+                <textarea id="scrapEditArea" class="scrap-edit-textarea" placeholder="스크랩 내용이 없습니다. 스크랩 버튼으로 NotebookLM 답변을 가져오세요." style="flex:1;min-height:200px;resize:none;border:none;outline:none;padding:16px;font-family:inherit;font-size:12px;line-height:1.6"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-download" data-action="downloadContent" data-arg="txt">TXT 저장</button>
+                <button class="btn-download" data-action="downloadContent" data-arg="md">MD 저장</button>
+                <button class="btn-action" data-action="openViewScrapInNewWindow" style="flex:none">새 창</button>
+                <button class="btn-tomd" data-action="sendToMDAndClose" data-arg="view-scrap-modal">ToMD로 보내기</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="manual-scrap-modal" class="modal-overlay">
+        <div class="modal" style="width:360px">
+            <div class="modal-header">
+                <h3>수동 스크랩</h3>
+                <button class="btn-close" data-action="closeModal" data-arg="manual-scrap-modal">닫기</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin:0 0 12px 0">클립보드를 읽을 수 없습니다. 아래에 NotebookLM 답변을 붙여넣어 주세요.</p>
+                <textarea id="manualScrapText" placeholder="내용을 여기에 붙여넣으세요..." style="min-height:120px;background:#f9fafb;color:#1f2937;border:1px solid #e5e7eb"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-close" data-action="closeModal" data-arg="manual-scrap-modal">취소</button>
+                <button class="btn-tomd" data-action="confirmManualScrap">확인 및 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="accumulated-modal" class="modal-overlay">
+        <div class="modal" style="width:380px">
+            <div class="modal-header">
+                <h3>누적 스크랩 목록</h3>
+                <button class="btn-close" data-action="closeModal" data-arg="accumulated-modal">닫기</button>
+            </div>
+            <div class="modal-body" id="accumulated-display">저장된 스크랩이 없습니다.</div>
+            <div class="modal-footer">
+                <button class="btn-download" data-action="downloadAccumulatedContent" data-arg="txt">TXT 저장</button>
+                <button class="btn-download" data-action="downloadAccumulatedContent" data-arg="md">MD 저장</button>
+                <button class="btn-tomd" data-action="sendAccumulatedToMDAndClose" data-arg="accumulated-modal">ToMD로 보내기</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="saved-prompts-modal" class="modal-overlay">
+        <div class="modal" style="width:420px;max-height:85vh">
+            <div class="modal-header" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+                <h3>저장된 프롬프트</h3>
+                <div style="display:flex;gap:6px;align-items:center">
+                    <button class="btn-action" data-action="openModal" data-arg="add-prompt-modal" style="padding:6px 10px;font-size:10px">+ 추가</button>
+                    <button class="btn-action" data-action="openPromptsFullWindow" style="padding:6px 10px;font-size:10px" title="폴더·검색 등 전체 기능">새 창</button>
+                    <button class="btn-close" data-action="closeModal" data-arg="saved-prompts-modal">닫기</button>
+                </div>
+            </div>
+            <div class="modal-body" id="prompts-list" style="max-height:320px;overflow-y:auto">저장된 프롬프트가 없습니다.</div>
+        </div>
+    </div>
+
+    <div id="add-prompt-modal" class="modal-overlay">
+        <div class="modal" style="width:400px">
+            <div class="modal-header">
+                <h3>프롬프트 저장</h3>
+                <button class="btn-close" data-action="closeModal" data-arg="add-prompt-modal">닫기</button>
+            </div>
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+                <div>
+                    <label class="prompt-label">제목</label>
+                    <input type="text" id="newPromptTitle" class="modal-input" placeholder="프롬프트 제목">
+                </div>
+                <div>
+                    <label class="prompt-label">내용</label>
+                    <textarea id="newPromptContent" class="modal-input" placeholder="프롬프트 내용..." style="min-height:120px;resize:vertical"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-close" data-action="closeModal" data-arg="add-prompt-modal">취소</button>
+                <button class="btn-download" data-action="saveNewPrompt" style="background:#16a34a;color:#fff">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-modal-slot"></div>
+    <div id="message-box" class="msg-toast">메시지</div>
+    <script src="confirm/confirm.js"></script>
+    <script src="popup_setting/popup-settings.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>
