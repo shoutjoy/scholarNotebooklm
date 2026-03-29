@@ -10,7 +10,15 @@
   const BTN_SMALL_ID = 'scholar-assistant-float-btn-small';
   const MD_EDITOR_HEADER_BTN_ID = 'scholar-mdeditor-header-btn';
   const STORAGE_HIDE_MD_EDITOR_HEADER = 'hideMDEditorHeader';
+  const STORAGE_HIDE_SCHOLAR_SLIDE_STUDIO = 'hideScholarSlideStudio';
+  const STORAGE_HIDE_MDPROVIEWER_STUDIO = 'hideMDProViewerStudio';
+  const STUDIO_BUTTONS_HOST_MARKER = 'data-scholar-studio-buttons-host';
+  const STUDIO_VISIBILITY_STYLE_ID = 'scholar-studio-visibility-style';
+  const STUDIO_NOTE_ACTIONS_MARKER = 'data-scholar-studio-note-actions';
+  const STUDIO_NOTE_MENU_ACTION_MARKER = 'data-scholar-studio-note-menu-action';
+  const STUDIO_NOTE_INLINE_VIEW_MARKER = 'data-scholar-studio-note-inline-view';
   const PROMPTS_HEADER_BTN_ID = 'scholar-prompts-header-btn';
+  const KORTEX_PDF2PPT_MARKER = 'data-scholar-kortex-pdf2ppt';
   const SIDEBAR_ID = 'scholar-assistant-sidebar';
   const STORAGE_FEATURE_NOTEBOOKLM = 'scholarFeatureNotebookLM';
   let scholarNotebookLMTeardownDone = false;
@@ -26,8 +34,18 @@
     try {
       document.querySelectorAll('[data-scholar-studio-prompts="1"]').forEach((el) => el.remove());
     } catch (_) {}
+    try { window.ScholarKortex?.teardown?.(); } catch (_) {}
     try {
       document.querySelectorAll('[data-scholar-studio-btns-injected]').forEach((el) => el.remove());
+    } catch (_) {}
+    try {
+      document.querySelectorAll('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]').forEach((el) => el.remove());
+    } catch (_) {}
+    try {
+      document.querySelectorAll('[' + STUDIO_NOTE_MENU_ACTION_MARKER + '="1"]').forEach((el) => el.remove());
+    } catch (_) {}
+    try {
+      document.querySelectorAll('[' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"]').forEach((el) => el.remove());
     } catch (_) {}
     try {
       document.querySelectorAll('[data-scholar-msg-btns-injected="1"]').forEach((el) => el.remove());
@@ -93,6 +111,17 @@
   const STORAGE_POPUP_SIDEBAR_COMPACT = 'popupSidebarCompact';
 
   let toggleSidebarFn = null;
+  const studioButtonsState = {
+    hideSlide: true,
+    hideMdPro: true,
+    observer: null,
+    refreshPending: false,
+    refreshing: false,
+    noteMenuTrackingBound: false,
+    storageReady: false,
+    initialized: false,
+  };
+  let lastStudioNoteMenuCard = null;
   let closeSidebarFn = null;
   let pos = { left: 0, top: 0 };
   let size = { width: 560, height: 720 };
@@ -156,7 +185,7 @@
 
   async function getConfiguredToMDUrl() {
     let url = 'https://mdproviewer.vercel.app/';
-    const internalUrl = EXTENSION_BASE_URL ? EXTENSION_BASE_URL + 'vieweditor/index.html' : url;
+    const internalUrl = EXTENSION_BASE_URL ? EXTENSION_BASE_URL + 'md_editor/index.html' : url;
     try {
       if (typeof chrome !== 'undefined' && chrome.storage?.local) {
         const data = await chrome.storage.local.get('tomdOpenType');
@@ -209,7 +238,7 @@
     const extVersion = getManifestVersion() || '—';
     const btn = document.createElement('button');
     btn.id = BTN_ID;
-    btn.innerHTML = `학술도구 어시스턴트 by박중희 ${extVersion}`;
+    btn.innerHTML = `학술도구 어시스턴트 ${extVersion}`;
     btn.title = '학술도구 어시스턴트 사이드바 열기/닫기';
     btn.style.cssText = baseBtnStyle + 'margin-left: 12px; padding: 4px 12px;';
     btn.onmouseover = () => {
@@ -986,6 +1015,513 @@
     return candidates.sort((a, b) => b.length - a.length)[0];
   }
 
+  function getConversationPanel() {
+    const panel = document.querySelector('section.chat-panel') ||
+      document.querySelector('chat-panel') ||
+      document.querySelector('[class*="chat-panel"]');
+    return panel || null;
+  }
+
+  function isScrollableElement(el) {
+    if (!el || el === document.body) return false;
+    try {
+      return el.scrollHeight > el.clientHeight + 20;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function getElementParentOrHost(el) {
+    if (!el) return null;
+    if (el.parentElement) return el.parentElement;
+    try {
+      const root = typeof el.getRootNode === 'function' ? el.getRootNode() : null;
+      if (root && root.host && root.host !== el) return root.host;
+    } catch (_) {}
+    return null;
+  }
+
+  function findScrollableAncestor(start, options = {}) {
+    const preferNonRoot = options.preferNonRoot !== false;
+    const rootScroller = document.scrollingElement || document.documentElement;
+    let rootFallback = null;
+    let current = start;
+    for (let i = 0; i < 24 && current; i++) {
+      if (isScrollableElement(current)) {
+        if (current === rootScroller || current === document.documentElement || current === document.body) {
+          rootFallback = rootScroller || current;
+        } else {
+          return current;
+        }
+      }
+      if (current === document.body) break;
+      current = getElementParentOrHost(current);
+    }
+    return preferNonRoot ? rootFallback : (rootFallback || null);
+  }
+
+  function findConversationScrollContainer() {
+    const panel = getConversationPanel();
+    const rootScroller = document.scrollingElement || document.documentElement;
+    if (!panel) return rootScroller && isScrollableElement(rootScroller) ? rootScroller : null;
+
+    const messages = sortMessagesTopToBottom(getConversationMessages());
+    const anchorNodes = [
+      messages[0],
+      messages[messages.length - 1],
+      panel.querySelector('.chat-panel-content'),
+      panel.querySelector('[class*="chat-panel-content"]'),
+      panel.querySelector('[class*="scroll"]'),
+      panel
+    ].filter(Boolean);
+
+    for (const node of anchorNodes) {
+      const found = findScrollableAncestor(node, { preferNonRoot: true });
+      if (found) return found;
+    }
+
+    return findScrollableAncestor(panel, { preferNonRoot: false });
+  }
+
+  function getConversationScrollTargets() {
+    const container = findConversationScrollContainer();
+    return container ? [container] : null;
+  }
+
+  function getScrollTopSafe(target) {
+    if (!target) return 0;
+    try {
+      if (target === document.scrollingElement || target === document.documentElement || target === document.body) {
+        return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      }
+      return target.scrollTop || 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function getScrollMaxSafe(target) {
+    if (!target) return 0;
+    try {
+      if (target === document.scrollingElement || target === document.documentElement || target === document.body) {
+        const scroller = document.scrollingElement || document.documentElement;
+        return Math.max(0, (scroller.scrollHeight || 0) - window.innerHeight);
+      }
+      return Math.max(0, (target.scrollHeight || 0) - (target.clientHeight || 0));
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function setScrollTopSafe(target, top) {
+    if (!target) return;
+    try {
+      if (target === document.scrollingElement || target === document.documentElement || target === document.body) {
+        window.scrollTo(0, Math.max(0, top));
+        document.documentElement.scrollTop = Math.max(0, top);
+        document.body.scrollTop = Math.max(0, top);
+        return;
+      }
+      target.scrollTop = Math.max(0, top);
+    } catch (_) {}
+  }
+
+  function scrollTargetsTowardBottom(targets, step) {
+    let moved = false;
+    (targets || []).forEach((target) => {
+      const currentTop = getScrollTopSafe(target);
+      const maxTop = getScrollMaxSafe(target);
+      const nextTop = Math.min(maxTop, currentTop + Math.max(0, step));
+      if (nextTop > currentTop + 1) {
+        setScrollTopSafe(target, nextTop);
+        moved = true;
+      }
+    });
+    return moved;
+  }
+
+  function scrollTargetsToBottom(targets) {
+    let moved = false;
+    (targets || []).forEach((target) => {
+      const currentTop = getScrollTopSafe(target);
+      const maxTop = getScrollMaxSafe(target);
+      if (maxTop > currentTop + 1) {
+        setScrollTopSafe(target, maxTop);
+        moved = true;
+      }
+    });
+    return moved;
+  }
+
+  function isAtBottomSafe(target) {
+    if (!target) return true;
+    try {
+      if (target === document.scrollingElement || target === document.documentElement || target === document.body) {
+        const scroller = document.scrollingElement || document.documentElement;
+        return (window.scrollY + window.innerHeight) >= (scroller.scrollHeight - 6);
+      }
+      return (target.scrollTop + target.clientHeight) >= (target.scrollHeight - 6);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function getMessageSignature(msg) {
+    if (!msg) return '';
+    const role = getMessageRole(msg);
+    const text = extractConversationMessageText(msg) || (msg.textContent || '');
+    return `${role}:${text.replace(/\s+/g, ' ').trim().slice(0, 240)}`;
+  }
+
+  function scrollMessageIntoView(msg, block) {
+    if (!msg?.scrollIntoView) return;
+    try {
+      msg.scrollIntoView({ block, inline: 'nearest' });
+    } catch (_) {
+      try { msg.scrollIntoView(); } catch (_) {}
+    }
+  }
+
+  async function moveConversationToTop(wait) {
+    const target = findConversationScrollContainer();
+    if (!target) return;
+
+    let previousFirst = '';
+    let stableCount = 0;
+    for (let i = 0; i < 120; i++) {
+      const messages = sortMessagesTopToBottom(getConversationMessages());
+      const first = messages[0];
+      setScrollTopSafe(target, 0);
+      if (first) scrollMessageIntoView(first, 'start');
+      await wait(320);
+
+      const refreshedTarget = findConversationScrollContainer() || target;
+      const refreshed = sortMessagesTopToBottom(getConversationMessages());
+      const currentFirst = getMessageSignature(refreshed[0]);
+      const topReached = getScrollTopSafe(refreshedTarget) <= 2;
+      if (currentFirst && currentFirst === previousFirst && topReached) stableCount += 1;
+      else stableCount = 0;
+      previousFirst = currentFirst;
+      if (stableCount >= 4) break;
+    }
+  }
+
+  function getConversationMessages() {
+    const panel = document.querySelector('section.chat-panel') ||
+      document.querySelector('chat-panel') ||
+      document.querySelector('[class*="chat-panel"]');
+    if (!panel) return [];
+
+    const candidates = queryAllIncludingShadow(panel, 'chat-message, [role="article"], [class*="message"], [class*="prompt"], [data-author], [author]')
+      .filter((el) => el && el !== panel && el.nodeType === 1);
+
+    const filtered = candidates.filter((el) => {
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (text.length < 2) return false;
+      const marker = [
+        el.tagName || '',
+        el.getAttribute?.('data-author') || '',
+        el.getAttribute?.('author') || '',
+        el.getAttribute?.('aria-label') || '',
+        typeof el.className === 'string' ? el.className : ''
+      ].join(' ').toLowerCase();
+      const looksLikeMessage = el.matches?.('chat-message, [role="article"]') || /message|prompt|query|user|assistant|model|response|article/.test(marker);
+      if (!looksLikeMessage && !findCopyButtonInMessage(el)) return false;
+      return !candidates.some((other) => other !== el && other.contains(el));
+    });
+
+    return filtered.length ? filtered : Array.from(panel.querySelectorAll('chat-message'));
+  }
+
+  function sortMessagesTopToBottom(messages) {
+    return [...messages].sort((a, b) => {
+      try {
+        return a.getBoundingClientRect().top - b.getBoundingClientRect().top;
+      } catch (_) {
+        return 0;
+      }
+    });
+  }
+
+  function hasConversationEmptyState() {
+    const panel = document.querySelector('section.chat-panel') ||
+      document.querySelector('chat-panel') ||
+      document.querySelector('[class*="chat-panel"]');
+    if (!panel) return false;
+    return !!(
+      panel.querySelector('.chat-panel-empty-state') ||
+      panel.querySelector('[class*="chat-panel-empty-state"]')
+    );
+  }
+
+  function getMessageRole(msg) {
+    try {
+      if (findCopyButtonInMessage(msg)) return 'Assistant';
+    } catch (_) {}
+    const tokens = [
+      msg.getAttribute?.('data-author') || '',
+      msg.getAttribute?.('author') || '',
+      msg.getAttribute?.('aria-label') || '',
+      typeof msg.className === 'string' ? msg.className : '',
+      msg.textContent || ''
+    ].join(' ').toLowerCase();
+    if (/\buser\b|\byou\b|\bprompt\b|\bquery\b|question/.test(tokens)) return 'User';
+    if (/\bassistant\b|\bmodel\b|\bresponse\b|\banswer\b|gemini|bard/.test(tokens)) return 'Assistant';
+    return 'User';
+  }
+
+  function extractConversationMessageText(msg) {
+    if (!msg) return '';
+    let card = msg.querySelector('mat-card') ||
+      msg.querySelector('[class*="card"]') ||
+      msg.querySelector('[class*="content"]') ||
+      msg.querySelector('[class*="message"]') ||
+      msg.querySelector('[class*="prompt"]');
+    if (!card) {
+      const found = queryAllIncludingShadow(msg, 'mat-card, [class*="card"], [class*="content"], [class*="message"], [class*="prompt"]');
+      card = found[0] || msg;
+    }
+    const clone = card.cloneNode(true);
+    clone.querySelectorAll('mat-card-actions, chat-actions, [class*="actions"], button, [role="button"], svg, mat-icon').forEach((el) => el.remove());
+    const text = (domToMarkdown(clone) || clone.innerText || clone.textContent || '')
+      .replace(/\b(button_magic|arrow_drop_up|arrow_drop_down|more_horiz|thumb_up|thumb_down|content_copy)\s*/gi, '')
+      .replace(/^(User|Assistant|System)\s*:?\s*\n?/i, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    return text;
+  }
+
+  function appendVisibleConversationEntries(collectedEntries, messages, detectedSet) {
+    const visibleEntries = [];
+    messages.forEach((msg) => {
+      const detectedKey = getMessageSignature(msg);
+      if (detectedKey) detectedSet.add(detectedKey);
+      const text = extractConversationMessageText(msg);
+      if (!text || text.length < 2) return;
+      const normalized = text.replace(/\s+/g, ' ').trim();
+      visibleEntries.push({
+        signature: detectedKey || normalized,
+        text
+      });
+    });
+
+    if (!visibleEntries.length) return 0;
+
+    let overlap = 0;
+    const maxOverlap = Math.min(collectedEntries.length, visibleEntries.length);
+    for (let size = maxOverlap; size > 0; size--) {
+      let matched = true;
+      for (let i = 0; i < size; i++) {
+        if (collectedEntries[collectedEntries.length - size + i].signature !== visibleEntries[i].signature) {
+          matched = false;
+          break;
+        }
+      }
+      if (matched) {
+        overlap = size;
+        break;
+      }
+    }
+
+    if (!overlap && collectedEntries.length) {
+      const lastSignature = collectedEntries[collectedEntries.length - 1].signature;
+      const matchIndex = visibleEntries.findIndex((entry) => entry.signature === lastSignature);
+      if (matchIndex >= 0) overlap = matchIndex + 1;
+    }
+
+    let added = 0;
+    visibleEntries.slice(overlap).forEach((entry) => {
+      collectedEntries.push(entry);
+      added += 1;
+    });
+    return added;
+  }
+
+  function isElementVisibleInsideContainer(el, container) {
+    if (!el) return false;
+    try {
+      const rect = el.getBoundingClientRect();
+      if (!rect || rect.height <= 0 || rect.width <= 0) return false;
+      const rootScroller = document.scrollingElement || document.documentElement;
+      if (!container || container === rootScroller || container === document.documentElement || container === document.body) {
+        return rect.bottom >= 0 && rect.top <= window.innerHeight;
+      }
+      const containerRect = container.getBoundingClientRect();
+      return rect.bottom >= containerRect.top && rect.top <= containerRect.bottom;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function findScrapButtonInMessage(msg) {
+    if (!msg) return null;
+    return msg.querySelector(`[${SCRAP_BTN_MARKER}="1"]`);
+  }
+
+  function getOrderedScrapTargets(container) {
+    injectMessageActionButtonsAll();
+    return sortMessagesTopToBottom(getConversationMessages()).map((msg) => {
+      const btn = findScrapButtonInMessage(msg);
+      return { msg, btn };
+    }).filter(({ msg, btn }) => {
+      if (!btn) return false;
+      return isElementVisibleInsideContainer(msg, container) || isElementVisibleInsideContainer(btn, container);
+    });
+  }
+
+  function buildScrapEntrySignature(msg, text) {
+    const base = getMessageSignature(msg);
+    if (base) return `scrap:${base}`;
+    return `scrap:${String(text || '').replace(/\s+/g, ' ').trim().slice(0, 240)}`;
+  }
+
+  function advanceConversationScroll(container) {
+    if (!container) return false;
+    const visibleTargets = getOrderedScrapTargets(container);
+    const lastVisible = visibleTargets[visibleTargets.length - 1]?.msg;
+    if (lastVisible) {
+      scrollMessageIntoView(lastVisible, 'end');
+    }
+    const currentTop = getScrollTopSafe(container);
+    const maxTop = getScrollMaxSafe(container);
+    const step = Math.max(240, Math.floor((container.clientHeight || 600) * 0.72));
+    const nextTop = Math.min(maxTop, currentTop + step);
+    if (nextTop <= currentTop + 1) return false;
+    setScrollTopSafe(container, nextTop);
+    return true;
+  }
+
+  async function readStoredScrapContent() {
+    try {
+      const data = await chrome.storage.local.get('scrappedContent');
+      return String(data?.scrappedContent || '').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  async function collectFullConversationText() {
+    const initialScrollContainer = findConversationScrollContainer();
+    if (!initialScrollContainer) {
+      return {
+        text: '',
+        detectedMessageCount: 0,
+        collectedMessageCount: 0
+      };
+    }
+
+    const originalScrollTop = getScrollTopSafe(initialScrollContainer);
+    const originalTargetPositions = (getConversationScrollTargets() || []).map((target) => ({
+      target,
+      top: getScrollTopSafe(target)
+    }));
+    const detected = new Set();
+    const collectedEntries = [];
+    const collectedSignatures = new Set();
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    try {
+      await moveConversationToTop(wait);
+      await wait(500);
+      let activeScrollContainer = findConversationScrollContainer() || initialScrollContainer;
+      let previousScrollTop = getScrollTopSafe(activeScrollContainer);
+      let noNewMessageCount = 0;
+      let noScrollAdvanceCount = 0;
+      let bottomConfirmCount = 0;
+      for (let i = 0; i < 260; i++) {
+        activeScrollContainer = findConversationScrollContainer() || activeScrollContainer || initialScrollContainer;
+        injectMessageActionButtonsAll();
+        await wait(220);
+
+        const visibleTargets = getOrderedScrapTargets(activeScrollContainer);
+        let added = 0;
+        for (const { msg, btn } of visibleTargets) {
+          if (!btn) continue;
+          const detectedKey = getMessageSignature(msg);
+          if (detectedKey) detected.add(detectedKey);
+          const provisionalSignature = buildScrapEntrySignature(msg, '');
+          if (collectedSignatures.has(provisionalSignature)) continue;
+          try {
+            btn.click();
+          } catch (_) {
+            continue;
+          }
+          await wait(850);
+          const text = await readStoredScrapContent();
+          if (!text?.trim()) continue;
+          const entrySignature = buildScrapEntrySignature(msg, text);
+          if (collectedSignatures.has(entrySignature)) continue;
+          collectedSignatures.add(provisionalSignature);
+          collectedSignatures.add(entrySignature);
+          collectedEntries.push({ signature: entrySignature, text });
+          added += 1;
+          await wait(160);
+        }
+
+        if (added === 0) noNewMessageCount += 1;
+        else noNewMessageCount = 0;
+
+        const moved = advanceConversationScroll(activeScrollContainer);
+        await wait(320);
+        const updatedTop = getScrollTopSafe(activeScrollContainer);
+        const atBottom = isAtBottomSafe(activeScrollContainer);
+
+        if (!moved || updatedTop <= previousScrollTop + 1) noScrollAdvanceCount += 1;
+        else noScrollAdvanceCount = 0;
+        previousScrollTop = updatedTop;
+        if (!atBottom) bottomConfirmCount = 0;
+
+        if (hasConversationEmptyState() && added === 0) {
+          break;
+        }
+        if (atBottom) {
+          injectMessageActionButtonsAll();
+          await wait(220);
+          const tailTargets = getOrderedScrapTargets(activeScrollContainer);
+          let tailAdded = 0;
+          for (const { msg, btn } of tailTargets) {
+            if (!btn) continue;
+            const provisionalSignature = buildScrapEntrySignature(msg, '');
+            if (collectedSignatures.has(provisionalSignature)) continue;
+            try {
+              btn.click();
+            } catch (_) {
+              continue;
+            }
+            await wait(850);
+            const text = await readStoredScrapContent();
+            if (!text?.trim()) continue;
+            const entrySignature = buildScrapEntrySignature(msg, text);
+            if (collectedSignatures.has(entrySignature)) continue;
+            collectedSignatures.add(provisionalSignature);
+            collectedSignatures.add(entrySignature);
+            collectedEntries.push({ signature: entrySignature, text });
+            tailAdded += 1;
+          }
+          const remainingCollectible = tailTargets.some(({ msg }) => !collectedSignatures.has(buildScrapEntrySignature(msg, '')));
+          if (tailAdded === 0 && !remainingCollectible) bottomConfirmCount += 1;
+          else bottomConfirmCount = 0;
+          if (bottomConfirmCount >= 3) {
+            break;
+          }
+          continue;
+        }
+        if (noScrollAdvanceCount >= 4 && noNewMessageCount >= 3) {
+          break;
+        }
+      }
+    } finally {
+      originalTargetPositions.forEach(({ target, top }) => setScrollTopSafe(target, top));
+      setScrollTopSafe(initialScrollContainer, originalScrollTop);
+    }
+
+    return {
+      text: collectedEntries.map((entry) => entry.text).join('\n\n').trim(),
+      detectedMessageCount: Math.max(detected.size, collectedSignatures.size),
+      collectedMessageCount: collectedEntries.length
+    };
+  }
+
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'toggleSidebar') {
@@ -1006,6 +1542,32 @@
       getLastMessageTextFull().then(text => {
         sendResponse({ ok: !!text, text });
       }).catch(() => sendResponse({ ok: false, text: '' }));
+      return true;
+    } else if (message.action === 'getConversationText') {
+      collectFullConversationText().then((result) => {
+        const text = result?.text || '';
+        sendResponse({
+          ok: !!text,
+          text,
+          detectedMessageCount: Number(result?.detectedMessageCount) || 0,
+          collectedMessageCount: Number(result?.collectedMessageCount) || 0
+        });
+      }).catch((e) => sendResponse({ ok: false, text: '', detectedMessageCount: 0, collectedMessageCount: 0, err: String(e) }));
+      return true;
+    } else if (message.action === 'refreshNotebookUiPreferences') {
+      try {
+        if (typeof message.hideConversationSave === 'boolean') {
+          const frame = document.querySelector('#scholar-assistant-sidebar iframe');
+          try { frame?.contentWindow?.postMessage({ type: 'scholarApplyConversationSaveVisibility', hidden: message.hideConversationSave }, '*'); } catch (_) {}
+        }
+        syncMDEditorHeaderButtonVisibility();
+        syncStudioButtonsVisibilityFromStorage();
+        setTimeout(() => syncStudioButtonsVisibilityFromStorage(), 150);
+        setTimeout(() => injectStudioButtons(), 300);
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, err: String(e) });
+      }
       return true;
     } else if (message.action === 'applyPromptToStudio') {
       applyPromptToStudioInput(message.text || '', message.runImmediately === true)
@@ -1194,6 +1756,7 @@
   }
 
   const MSG_BTN_MARKER = 'data-scholar-msg-btns-injected';
+  const SCRAP_BTN_MARKER = 'data-scholar-scrap-btn';
 
   /** 메시지 내 액션 바(스크랩/ToMD 넣을 컨테이너) 찾기 */
   function findMessageActionsContainer(msg) {
@@ -1235,9 +1798,73 @@
     } catch (_) { return null; }
   }
 
+  async function persistScrapText(text) {
+    if (!text?.trim()) return;
+    try {
+      const data = await chrome.storage.local.get('accumulatedScraps');
+      const list = data?.accumulatedScraps || [];
+      list.push({ id: Date.now(), content: text, ts: new Date().toISOString() });
+      await chrome.storage.local.set({ scrappedContent: text, accumulatedScraps: list });
+    } catch (_) {}
+  }
+
+  async function getScrapResponseFormat() {
+    try {
+      const data = await chrome.storage.local.get('scrapResponseFormat');
+      return data?.scrapResponseFormat || 'answer_only';
+    } catch (_) {
+      return 'answer_only';
+    }
+  }
+
+  function getPreviousUserMessageText(msg) {
+    try {
+      const messages = sortMessagesTopToBottom(getConversationMessages());
+      const currentIndex = messages.findIndex((item) => item === msg);
+      if (currentIndex <= 0) return '';
+      for (let i = currentIndex - 1; i >= 0; i--) {
+        if (getMessageRole(messages[i]) !== 'User') continue;
+        const text = extractConversationMessageText(messages[i]);
+        if (text?.trim()) return text.trim();
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  function formatScrapResponseText(answerText, questionText, format) {
+    const answer = (answerText || '').trim();
+    const question = (questionText || '').trim();
+    if (!answer) return '';
+    if (format === 'answer_only') return answer;
+
+    const normalizedFormat = format === 'simple' ? 'conversation' : format;
+    if (normalizedFormat === 'conversation') {
+      if (!question) return `## Assistant\n\n${answer}`;
+      return `## User Prompt\n\n${question}\n\n## Assistant Answer\n\n${answer}`;
+    }
+
+    if (!question) return answer;
+    return `## User Prompt\n\n${question}\n\n## Assistant Answer\n\n${answer}`;
+  }
+
+  async function runScrapForMessage(msg, options = {}) {
+    const answerText = await getMessageTextForToMD(msg);
+    if (!answerText?.trim()) return '';
+    const format = await getScrapResponseFormat();
+    const normalizedFormat = format === 'simple' ? 'conversation' : format;
+    const questionText = normalizedFormat === 'answer_only' ? '' : getPreviousUserMessageText(msg);
+    const text = formatScrapResponseText(answerText, questionText, normalizedFormat);
+    if (!text) return '';
+    if (options.persist === true) {
+      await persistScrapText(text);
+    }
+    return text;
+  }
+
   function createScrapAndToMDButtons(msg) {
     const scrapBtn = document.createElement('button');
     scrapBtn.type = 'button';
+    scrapBtn.setAttribute(SCRAP_BTN_MARKER, '1');
     scrapBtn.textContent = '스크랩';
     scrapBtn.title = '이 답변을 스크랩';
     scrapBtn.style.cssText = `
@@ -1258,14 +1885,7 @@
     scrapBtn.onclick = async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const text = await getMessageTextForToMD(msg);
-      if (!text?.trim()) return;
-      try {
-        const data = await chrome.storage.local.get('accumulatedScraps');
-        const list = data?.accumulatedScraps || [];
-        list.push({ id: Date.now(), content: text, ts: new Date().toISOString() });
-        await chrome.storage.local.set({ scrappedContent: text, accumulatedScraps: list });
-      } catch (_) {}
+      await runScrapForMessage(msg, { persist: true });
     };
 
     const btn = document.createElement('button');
@@ -1710,6 +2330,679 @@
     return await getSelectedSourcesContent();
   }
 
+  function getVisibleElementText(el) {
+    if (!el) return '';
+    if ('value' in el && typeof el.value === 'string') return el.value.trim();
+    return (el.innerText || el.textContent || '').trim();
+  }
+
+  function isStudioSourceConvertLabel(text) {
+    const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+    return /소스로\s*(변환|전환)/.test(normalized);
+  }
+
+  function sanitizeFilename(name, fallbackBase) {
+    const base = String(name || fallbackBase || 'scholar_note')
+      .replace(/[\\/:*?"<>|]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return (base || 'scholar_note').slice(0, 80);
+  }
+
+  function buildStudioNoteDownloadName(extension) {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    return `meno_${stamp}.${extension}`;
+  }
+
+  function downloadPlainTextFile(filenameBase, extension, text) {
+    if (!text?.trim()) return false;
+    try {
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = buildStudioNoteDownloadName(extension);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 500);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function findStudioNoteConvertButton() {
+    const buttons = queryAllIncludingShadow(document.body, 'button, [role="button"]').filter((btn) => {
+      if (!isVisibleElement(btn)) return false;
+      if (!findClosestStudioNotePanelFromNode(btn)) return false;
+      const text = `${btn.textContent || ''} ${btn.getAttribute('aria-label') || ''} ${btn.getAttribute('title') || ''}`.replace(/\s+/g, ' ').trim();
+      return isStudioSourceConvertLabel(text);
+    });
+    return buttons[0] || null;
+  }
+
+  function showSavingToast(message = '저장중입니다...') {
+    let toast = document.getElementById('scholar-saving-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'scholar-saving-toast';
+      toast.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483647;padding:8px 14px;border-radius:999px;background:#0f766e;color:#ecfeff;font-size:12px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,0.3);pointer-events:none;';
+      document.documentElement.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.style.display = 'block';
+  }
+
+  function hideSavingToast() {
+    const toast = document.getElementById('scholar-saving-toast');
+    if (!toast) return;
+    toast.style.display = 'none';
+  }
+
+  // 버튼만 정확히 찾아 붙이기(메뉴/다른 영역 제외)
+  function findStudioNoteConvertButtons() {
+    return queryAllIncludingShadow(document.body, 'button, [role="button"]').filter((btn) => {
+      if (!isVisibleElement(btn)) return false;
+      if (!findClosestStudioNotePanelFromNode(btn)) return false;
+      if (btn.hasAttribute(STUDIO_NOTE_INLINE_VIEW_MARKER)) return false;
+      if (btn.closest('[role="menu"], [class*="menu"], [class*="Menu"]')) return false;
+      if (btn.closest('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]')) return false;
+      const text = `${btn.textContent || ''} ${btn.getAttribute('aria-label') || ''} ${btn.getAttribute('title') || ''}`.replace(/\s+/g, ' ').trim();
+      return isStudioSourceConvertLabel(text);
+    });
+  }
+
+  function findClosestStudioNotePanelFromNode(node) {
+    const containerSelector = 'artifact-library-note, [class*="artifact-library-note"], section.studio-panel, studio-panel, [class*="studio-panel"], [class*="StudioPanel"]';
+    let current = node;
+    while (current && current !== document.body) {
+      if (current.matches?.(containerSelector) && isVisibleElement(current) && isOnRightSide(current)) {
+        return current;
+      }
+      current = current.parentElement || current.getRootNode?.()?.host || null;
+    }
+    return null;
+  }
+
+  function findStudioNotePanels() {
+    const containerSelector = 'artifact-library-note, [class*="artifact-library-note"], section.studio-panel, studio-panel, [class*="studio-panel"], [class*="StudioPanel"]';
+    const editorSelector = '[contenteditable="true"], textarea, .ProseMirror, [role="textbox"]';
+    const editorCandidates = queryAllIncludingShadow(document.body, editorSelector)
+      .filter((el) => {
+        if (!isVisibleElement(el) || !isOnRightSide(el)) return false;
+        const text = getVisibleElementText(el);
+        return text.length >= 20;
+      });
+
+    const panels = [];
+    const seen = new Set();
+    for (const editor of editorCandidates) {
+      let current = editor;
+      while (current && current !== document.body) {
+        if (current.matches?.(containerSelector) && isVisibleElement(current) && isOnRightSide(current)) {
+          if (!seen.has(current)) {
+            seen.add(current);
+            panels.push(current);
+          }
+          break;
+        }
+        current = current.parentElement || current.getRootNode?.()?.host || null;
+      }
+    }
+    return panels.sort((a, b) => {
+      try {
+        const rectA = a.getBoundingClientRect();
+        const rectB = b.getBoundingClientRect();
+        return rectA.top - rectB.top || rectA.left - rectB.left;
+      } catch (_) {
+        return 0;
+      }
+    });
+  }
+
+  function getStudioArtifactNoteCard(el) {
+    return el?.closest?.('artifact-library-note, [class*="artifact-library-note"]') || null;
+  }
+
+  function getStudioNoteTitle(panel) {
+    if (!panel) return 'scholar_note';
+    const titleCandidates = queryAllIncludingShadow(panel, 'input, textarea, h1, h2, h3, [class*="title"], [class*="label"]').filter(isVisibleElement);
+    for (const el of titleCandidates) {
+      const text = getVisibleElementText(el);
+      if (text && text.length >= 2 && text.length <= 180) return text;
+    }
+    return 'scholar_note';
+  }
+
+  function getStudioNoteCardTitle(noteCard) {
+    if (!noteCard) return 'scholar_note';
+    const titleCandidates = queryAllIncludingShadow(noteCard, 'h1, h2, h3, span, div, p, [class*="title"], [class*="label"]')
+      .filter(isVisibleElement);
+    for (const el of titleCandidates) {
+      const text = getVisibleElementText(el).replace(/\s+/g, ' ').trim();
+      if (!text || text.length < 2 || text.length > 180) continue;
+      if (/^\d+\s*(분 전|시간 전|일 전)$/.test(text)) continue;
+      if (/^(소스\s*\d+개|메모 추가|소스로\s*(변환|전환)|Docs로 내보내기|Sheets로 내보내기|삭제)$/i.test(text)) continue;
+      return text;
+    }
+    return 'scholar_note';
+  }
+
+  function extractVisibleStudioNoteText(panel) {
+    if (!panel) return '';
+    const candidates = queryAllIncludingShadow(panel, '[contenteditable="true"], textarea, .ProseMirror, [role="textbox"]')
+      .filter((el) => isVisibleElement(el) && !el.closest('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]'));
+
+    let best = '';
+    for (const el of candidates) {
+      const text = getVisibleElementText(el).replace(/\n{3,}/g, '\n\n').trim();
+      if (text.length > best.length) best = text;
+    }
+
+    if (best.length >= 40) return best;
+
+    try {
+      const clone = panel.cloneNode(true);
+      clone.querySelectorAll('button, [role="button"], input, textarea, mat-icon, svg, [' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]').forEach((el) => el.remove());
+      return (clone.innerText || clone.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function extractVisibleStudioNoteMarkdown(panel) {
+    if (!panel) return '';
+    const candidates = queryAllIncludingShadow(panel, '[contenteditable="true"], textarea, .ProseMirror, [role="textbox"]')
+      .filter((el) => isVisibleElement(el) && !el.closest('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]'));
+
+    let best = '';
+    for (const el of candidates) {
+      let md = '';
+      try {
+        if (el.matches?.('textarea')) {
+          md = (el.value || '').trim();
+        } else {
+          const clone = el.cloneNode(true);
+          clone.querySelectorAll('button, [role="button"], input, textarea, mat-icon, svg').forEach((node) => node.remove());
+          md = (domToMarkdown(clone) || clone.innerText || clone.textContent || '').trim();
+        }
+      } catch (_) {}
+      md = (md || '').replace(/\n{3,}/g, '\n\n').trim();
+      if (md.length > best.length) best = md;
+    }
+
+    if (best.length >= 8) return best;
+
+    try {
+      const clone = panel.cloneNode(true);
+      clone.querySelectorAll('button, [role="button"], input, textarea, mat-icon, svg, [' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]').forEach((el) => el.remove());
+      return (domToMarkdown(clone) || clone.innerText || clone.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function findStudioNoteOpenTarget(noteCard) {
+    if (!noteCard) return null;
+    const noteRect = (() => {
+      try { return noteCard.getBoundingClientRect(); } catch (_) { return null; }
+    })();
+    const buttonCandidates = queryAllIncludingShadow(noteCard, 'button, [role="button"]')
+      .filter((el) => {
+        if (!isVisibleElement(el)) return false;
+        if (el.hasAttribute(STUDIO_NOTE_MENU_ACTION_MARKER)) return false;
+        const label = `${el.textContent || ''} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`.replace(/\s+/g, ' ').trim().toLowerCase();
+        if (/menu|more|옵션|더보기|more_vert|more_horiz|삭제|docs|sheets|소스로\s*(변환|전환)/.test(label)) return false;
+        if (noteRect) {
+          try {
+            const rect = el.getBoundingClientRect();
+            if (rect.width <= 48 && rect.left >= noteRect.left + noteRect.width * 0.72) return false;
+          } catch (_) {}
+        }
+        return true;
+      });
+    if (buttonCandidates.length) return buttonCandidates[0];
+
+    const candidates = queryAllIncludingShadow(noteCard, 'button, [role="button"], span, div, p, h1, h2, h3')
+      .filter((el) => {
+        if (!isVisibleElement(el)) return false;
+        const text = getVisibleElementText(el).trim();
+        if (!text || text.length < 2) return false;
+        if (/^(소스\s*\d+개|\d+\s*(분 전|시간 전|일 전)|메모 추가)$/i.test(text)) return false;
+        if (noteRect) {
+          try {
+            const rect = el.getBoundingClientRect();
+            if (rect.width <= 48 && rect.left >= noteRect.left + noteRect.width * 0.72) return false;
+          } catch (_) {}
+        }
+        return !el.closest('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]');
+      });
+    return candidates[0] || noteCard;
+  }
+
+  function clickStudioNoteOpenTarget(noteCard) {
+    if (!noteCard) return false;
+    const target = findStudioNoteOpenTarget(noteCard);
+    try {
+      target?.click?.();
+      return true;
+    } catch (_) {}
+    try {
+      const buttons = queryAllIncludingShadow(noteCard, 'button, [role="button"]')
+        .filter((el) => {
+          if (!isVisibleElement(el)) return false;
+          const label = `${el.textContent || ''} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`.replace(/\s+/g, ' ').trim().toLowerCase();
+          return !/menu|more|옵션|더보기|more_vert|more_horiz|삭제|docs|sheets|소스로\s*(변환|전환)/.test(label);
+        })
+        .sort((a, b) => {
+          try {
+            const ar = a.getBoundingClientRect();
+            const br = b.getBoundingClientRect();
+            const aa = ar.width * ar.height;
+            const ba = br.width * br.height;
+            return ba - aa || ar.left - br.left;
+          } catch (_) {
+            return 0;
+          }
+        });
+      if (buttons[0]) {
+        buttons[0].click();
+        return true;
+      }
+    } catch (_) {}
+    try {
+      noteCard.click?.();
+      return true;
+    } catch (_) {}
+    return false;
+  }
+
+  function hideVisibleStudioNoteMenus() {
+    const menus = findVisibleStudioNoteMenus();
+    menus.forEach((menu) => {
+      const overlay = menu.closest('.cdk-overlay-pane, [class*="overlay-pane"], [class*="overlay-container"]') || menu;
+      try {
+        overlay.style.display = 'none';
+        overlay.style.pointerEvents = 'none';
+      } catch (_) {}
+      try {
+        menu.style.display = 'none';
+        menu.style.pointerEvents = 'none';
+      } catch (_) {}
+    });
+    try {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+    } catch (_) {}
+  }
+
+  async function exportStudioNoteCardToMd(noteCard) {
+    if (!noteCard) return false;
+    showSavingToast('저장중입니다...');
+    try {
+    const previousPanels = findStudioNotePanels();
+    const previousPanel = previousPanels[0] || null;
+    const previousTitle = previousPanel ? getStudioNoteTitle(previousPanel) : '';
+    const previousText = previousPanel ? extractVisibleStudioNoteText(previousPanel) : '';
+    const noteTitle = getStudioNoteCardTitle(noteCard);
+    clickStudioNoteOpenTarget(noteCard);
+    await new Promise((resolve) => setTimeout(resolve, 90));
+    clickStudioNoteOpenTarget(noteCard);
+
+    for (let i = 0; i < 20; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 240));
+      const panels = findStudioNotePanels();
+      const panel = panels[0] || null;
+      if (!panel) continue;
+      const text = extractVisibleStudioNoteText(panel);
+      const currentTitle = getStudioNoteTitle(panel);
+      const changedFromPrevious = !!text && text !== previousText;
+      if (text.length >= 20 && (currentTitle === noteTitle || currentTitle !== previousTitle || changedFromPrevious || i >= 8)) {
+        return downloadPlainTextFile(noteTitle, 'md', text) || false;
+      }
+    }
+
+    const fallbackPanel = findStudioNotePanels()[0] || null;
+    const fallbackText = fallbackPanel ? extractVisibleStudioNoteText(fallbackPanel) : '';
+    if (fallbackText.length >= 8) {
+      return downloadPlainTextFile(noteTitle, 'md', fallbackText) || false;
+    }
+    const cardText = (noteCard.innerText || noteCard.textContent || '')
+      .replace(/\b(소스로\s*(변환|전환)|모든 메모를 소스로\s*(변환|전환)|Docs로 내보내기|Sheets로 내보내기|삭제)\b/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    if (cardText.length >= 8) {
+      return downloadPlainTextFile(noteTitle, 'md', cardText) || false;
+    }
+    return false;
+    } finally {
+      setTimeout(hideSavingToast, 250);
+    }
+  }
+
+  async function sendStudioNoteTextToMD(text) {
+    if (!text?.trim()) return false;
+    const targetUrl = await getConfiguredToMDUrl();
+    if (!await confirmToMDSave(targetUrl)) return false;
+    try {
+      await chrome.storage.local.set({ scholarToMDPaste: text });
+    } catch (_) {}
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (_) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch (_) {}
+    }
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    openConfiguredToMD(targetUrl);
+    return true;
+  }
+
+  async function openStudioNoteInViewScrap(text) {
+    if (!text?.trim()) return false;
+    try {
+      await chrome.storage.local.set({ scrappedContent: text });
+    } catch (_) {}
+    const fallback = () => {
+      try {
+        const url = chrome.runtime?.getURL ? chrome.runtime.getURL('vieweditor/view-scrap.html') : 'vieweditor/view-scrap.html';
+        window.open(url, 'studioNoteViewer', 'width=800,height=900');
+      } catch (_) {}
+    };
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ action: 'openWindow', url: 'vieweditor/view-scrap.html', width: 800, height: 900 }, (res) => {
+          if (chrome.runtime?.lastError || !res?.ok) fallback();
+        });
+        return true;
+      }
+    } catch (_) {}
+    fallback();
+    return true;
+  }
+// 새 인라인 보기 버튼 주입/클릭 처리
+  function createStudioNoteInlineViewButton(sourceId, resolvePanel) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute(STUDIO_NOTE_INLINE_VIEW_MARKER, '1');
+    btn.setAttribute('data-source-id', sourceId);
+    btn.textContent = '보기';
+    btn.title = '스크랩 보기 에디터로 열기';
+    btn.style.cssText = 'margin-left:8px;padding:4px 10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:12px;font-weight:700;line-height:1;cursor:pointer;white-space:nowrap;';
+    btn.addEventListener('mouseenter', () => { btn.style.background = '#1e293b'; });
+    btn.addEventListener('mouseleave', () => { btn.style.background = '#0f172a'; });
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const panel = resolvePanel?.();
+      if (!panel) return;
+      const text = extractVisibleStudioNoteMarkdown(panel);
+      if (!text?.trim()) return;
+      await openStudioNoteInViewScrap(text);
+    });
+    return btn;
+  }
+// 메모 패널 추적 후 본문 추출해서 기존 보기창 열기 연결:
+  function syncStudioNoteInlineViewButtons() {
+    const sourceButtons = findStudioNoteConvertButtons();
+    const sourceIds = new Set();
+
+    sourceButtons.forEach((sourceBtn, index) => {
+      let sourceId = sourceBtn.getAttribute('data-scholar-inline-source-id');
+      if (!sourceId) {
+        sourceId = `source-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`;
+        sourceBtn.setAttribute('data-scholar-inline-source-id', sourceId);
+      }
+      sourceIds.add(sourceId);
+      const parent = sourceBtn.parentElement;
+      if (!parent) return;
+
+      const resolvePanel = () => findClosestStudioNotePanelFromNode(sourceBtn) || findStudioNotePanels()[0] || null;
+      let viewBtn = parent.querySelector('[' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"][data-source-id="' + sourceId + '"]');
+      if (!viewBtn) {
+        viewBtn = createStudioNoteInlineViewButton(sourceId, resolvePanel);
+        if (sourceBtn.nextSibling) parent.insertBefore(viewBtn, sourceBtn.nextSibling);
+        else parent.appendChild(viewBtn);
+      }
+    });
+
+    document.querySelectorAll('[' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"]').forEach((btn) => {
+      const sourceId = btn.getAttribute('data-source-id') || '';
+      if (!sourceId || !sourceIds.has(sourceId)) btn.remove();
+    });
+
+    return sourceButtons.length > 0;
+  }
+
+  function createStudioNoteActionButton(label, variant, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    const base = 'height:34px;padding:0 14px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;line-height:1;border:1px solid transparent;white-space:nowrap;';
+    const theme = variant === 'primary'
+      ? 'background:#c2410c;color:#fff;border-color:#ea580c;'
+      : 'background:#233247;color:#e2e8f0;border-color:#334155;';
+    btn.style.cssText = base + theme;
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      await onClick?.(btn);
+    });
+    return btn;
+  }
+
+  function syncStudioNoteActions() {
+    const panels = findStudioNotePanels();
+    document.querySelectorAll('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]').forEach((host) => {
+      if (!panels.some((panel) => panel.contains(host))) host.remove();
+    });
+    if (!panels.length) return false;
+
+    panels.forEach((panel) => {
+      let host = panel.querySelector('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]');
+      if (!host) {
+        host = document.createElement('div');
+        host.setAttribute(STUDIO_NOTE_ACTIONS_MARKER, '1');
+        host.style.cssText = 'position:sticky;bottom:0;left:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%;padding:12px 0 0;margin-top:12px;background:linear-gradient(180deg, rgba(17,24,39,0) 0%, rgba(17,24,39,0.88) 24%, rgba(17,24,39,1) 100%);z-index:5;';
+        panel.appendChild(host);
+      }
+
+      const ensureButton = (selector, factory) => {
+        let btn = host.querySelector(selector);
+        if (!btn) {
+          btn = factory();
+          host.appendChild(btn);
+        }
+        return btn;
+      };
+
+      ensureButton('[data-note-action="txt"]', () => {
+        const btn = createStudioNoteActionButton('TXT 저장', 'secondary', async () => {
+          const text = extractVisibleStudioNoteText(panel);
+          if (!text) return;
+          downloadPlainTextFile(getStudioNoteTitle(panel), 'txt', text);
+        });
+        btn.setAttribute('data-note-action', 'txt');
+        return btn;
+      });
+
+      ensureButton('[data-note-action="md"]', () => {
+        const btn = createStudioNoteActionButton('MD 저장', 'secondary', async () => {
+          const text = extractVisibleStudioNoteText(panel);
+          if (!text) return;
+          downloadPlainTextFile(getStudioNoteTitle(panel), 'md', text);
+        });
+        btn.setAttribute('data-note-action', 'md');
+        return btn;
+      });
+
+      ensureButton('[data-note-action="preview"]', () => {
+        const btn = createStudioNoteActionButton('MD 보기', 'secondary', async () => {
+          const text = extractVisibleStudioNoteMarkdown(panel);
+          if (!text) return;
+          await openStudioNoteInViewScrap(text);
+        });
+        btn.setAttribute('data-note-action', 'preview');
+        return btn;
+      });
+
+      ensureButton('[data-note-action="tomd"]', () => {
+        const btn = createStudioNoteActionButton('ToMD로 보내기', 'primary', async () => {
+          const text = extractVisibleStudioNoteText(panel);
+          if (!text) return;
+          await sendStudioNoteTextToMD(text);
+        });
+        btn.setAttribute('data-note-action', 'tomd');
+        return btn;
+      });
+    });
+
+    return true;
+  }
+
+  function findVisibleStudioNoteMenus() {
+    const candidates = queryAllIncludingShadow(document.body, '[role="menu"], [class*="menu-panel"], [class*="MenuPanel"], [class*="menu"], [class*="Menu"]')
+      .filter((el) => {
+        if (!isVisibleElement(el) || !isOnRightSide(el)) return false;
+        const text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (text.length < 6) return false;
+        const items = Array.from(el.querySelectorAll('button, [role="menuitem"]')).filter(isVisibleElement);
+        if (items.length < 4) return false;
+        return isStudioSourceConvertLabel(text) && text.includes('삭제');
+      });
+    return candidates.filter((el) => !candidates.some((other) => other !== el && el.contains(other)));
+  }
+
+  function isLikelyStudioNoteMenuTrigger(button) {
+    if (!button || button.hasAttribute(STUDIO_NOTE_MENU_ACTION_MARKER)) return false;
+    const noteCard = getStudioArtifactNoteCard(button);
+    if (!noteCard || !isVisibleElement(noteCard)) return false;
+    const label = `${button.textContent || ''} ${button.getAttribute('aria-label') || ''} ${button.getAttribute('title') || ''}`.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (/txt|md 보기|md 저장|tomd|소스로\s*(변환|전환)/.test(label)) return false;
+    if (/more|menu|옵션|더보기|actions/.test(label) || label.includes('more_vert') || label.includes('more_horiz')) return true;
+    try {
+      const rect = button.getBoundingClientRect();
+      const noteRect = noteCard.getBoundingClientRect();
+      return !label && rect.width <= 44 && rect.height <= 44 && rect.left >= noteRect.left + noteRect.width * 0.68;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function bindStudioNoteMenuTracking() {
+    if (studioButtonsState.noteMenuTrackingBound) return;
+    studioButtonsState.noteMenuTrackingBound = true;
+    document.addEventListener('pointerdown', (event) => {
+      const button = event.target?.closest?.('button, [role="button"]');
+      if (!isLikelyStudioNoteMenuTrigger(button)) return;
+      lastStudioNoteMenuCard = getStudioArtifactNoteCard(button);
+      setTimeout(() => scheduleStudioButtonsRefresh(), 30);
+    }, true);
+  }
+
+  function createStudioNoteMenuActionItem(menu) {
+    const template = Array.from(menu.querySelectorAll('button, [role="menuitem"]'))
+      .find((el) => isVisibleElement(el) && !el.hasAttribute(STUDIO_NOTE_MENU_ACTION_MARKER));
+    const tagName = template?.tagName?.toLowerCase() === 'button' ? 'button' : 'div';
+    const item = document.createElement(tagName);
+    item.setAttribute(STUDIO_NOTE_MENU_ACTION_MARKER, '1');
+    item.setAttribute('role', template?.getAttribute?.('role') || 'menuitem');
+    if (tagName === 'button') item.type = 'button';
+    if (template?.className) item.className = template.className;
+    const computed = template ? window.getComputedStyle(template) : null;
+    item.style.cssText = [
+      'display:flex',
+      'align-items:center',
+      'justify-content:flex-start',
+      'gap:12px',
+      'width:100%',
+      'box-sizing:border-box',
+      `min-height:${computed?.minHeight && computed.minHeight !== '0px' ? computed.minHeight : '36px'}`,
+      `padding:${computed?.padding && computed.padding !== '0px' ? computed.padding : '10px 16px'}`,
+      'background:transparent',
+      `color:${computed?.color || 'inherit'}`,
+      'border:none',
+      `font-size:${computed?.fontSize || '14px'}`,
+      `font-weight:${computed?.fontWeight || '400'}`,
+      `font-family:${computed?.fontFamily || 'inherit'}`,
+      `line-height:${computed?.lineHeight || '1.4'}`,
+      'text-align:left',
+      'cursor:pointer'
+    ].join(';') + ';';
+    const spacer = document.createElement('span');
+    spacer.setAttribute('aria-hidden', 'true');
+    spacer.style.cssText = 'display:inline-block;flex:0 0 24px;width:24px;height:1px;';
+    const label = document.createElement('span');
+    label.textContent = 'MD로 저장';
+    label.style.cssText = 'display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    item.appendChild(spacer);
+    item.appendChild(label);
+    item.addEventListener('mouseenter', () => {
+      item.style.background = computed?.backgroundColor && computed.backgroundColor !== 'rgba(0, 0, 0, 0)' ? computed.backgroundColor : 'rgba(255,255,255,0.06)';
+    });
+    item.addEventListener('mouseleave', () => {
+      item.style.background = 'transparent';
+    });
+    item.addEventListener('focus', () => {
+      item.style.background = 'rgba(255,255,255,0.06)';
+    });
+    item.addEventListener('blur', () => {
+      item.style.background = 'transparent';
+    });
+    if (!template) {
+      item.style.borderRadius = '6px';
+    }
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const card = lastStudioNoteMenuCard;
+      if (!card) return;
+      const labelEl = item.querySelector('span:last-child') || item;
+      const originalLabel = labelEl.textContent || 'MD로 저장';
+      labelEl.textContent = '저장 중...';
+      hideVisibleStudioNoteMenus();
+      setTimeout(() => {
+        exportStudioNoteCardToMd(card)
+          .catch(() => false)
+          .finally(() => {
+            labelEl.textContent = originalLabel;
+          });
+      }, 80);
+    });
+    return item;
+  }
+
+  function syncStudioNoteMenuActions() {
+    const menus = findVisibleStudioNoteMenus();
+    if (lastStudioNoteMenuCard && !lastStudioNoteMenuCard.isConnected) {
+      lastStudioNoteMenuCard = null;
+    }
+    const menu = menus[0] || null;
+    document.querySelectorAll('[' + STUDIO_NOTE_MENU_ACTION_MARKER + '="1"]').forEach((item) => {
+      if (!menu || !menu.contains(item)) item.remove();
+    });
+    if (!menu || !lastStudioNoteMenuCard) return false;
+    menu.querySelectorAll('[' + STUDIO_NOTE_MENU_ACTION_MARKER + '="1"]').forEach((item) => item.remove());
+
+    const item = createStudioNoteMenuActionItem(menu);
+    const sourceItem = Array.from(menu.querySelectorAll('button, [role="menuitem"]'))
+      .find((el) => isStudioSourceConvertLabel((el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim()));
+    if (sourceItem?.parentElement) {
+      sourceItem.parentElement.insertBefore(item, sourceItem.nextSibling);
+    } else {
+      menu.appendChild(item);
+    }
+    return true;
+  }
+
   const STUDIO_BTN_MARKER = 'data-scholar-studio-btns-injected';
 
   function queryAllIncludingShadow(root, selector) {
@@ -1737,6 +3030,48 @@
     return rect.left > window.innerWidth * 0.45;
   }
 
+  function isVisibleElement(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const style = window.getComputedStyle(el);
+    return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || '1') > 0;
+  }
+
+  function isInjectedStudioControl(el) {
+    if (!el || !el.closest) return false;
+    return !!(
+      el.closest('[data-scholar-studio-action]') ||
+      el.closest('[' + STUDIO_BUTTONS_HOST_MARKER + '="1"]') ||
+      el.closest('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]') ||
+      el.closest('[' + STUDIO_NOTE_MENU_ACTION_MARKER + '="1"]') ||
+      el.closest('[' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"]') ||
+      el.closest('[data-scholar-studio-prompts="1"]') ||
+      el.closest('[' + KORTEX_PDF2PPT_MARKER + '="1"]')
+    );
+  }
+
+  function hasVisibleNativeStudioTiles(grid) {
+    if (!grid || !grid.querySelectorAll) return false;
+    const studioKeywords = [
+      'AI 오디오', '슬라이드 자료', '마인드맵', '보고서', '플래시카드', '퀴즈', '인포그래픽', '데이터 표', '동영상 개요',
+      'AI Audio', 'Slide', 'Mind Map', 'Report', 'Flashcard', 'Quiz', 'Infographic', 'Data Table', 'Video Overview'
+    ];
+    const nodes = grid.querySelectorAll('button, [role="button"], a[role="button"], [class*="tile"], [class*="card"], [class*="Tile"], [class*="Card"]');
+    let hit = 0;
+    for (const n of nodes) {
+      if (isInjectedStudioControl(n)) continue;
+      if (!isVisibleElement(n)) continue;
+      const text = (n.textContent || '').trim();
+      if (!text) continue;
+      if (studioKeywords.some((k) => text.includes(k))) {
+        hit += 1;
+        if (hit >= 2) return true;
+      }
+    }
+    return false;
+  }
+
   function findStudioGrid() {
     const studioKeywords = [
       'AI 오디오', '슬라이드 자료', '마인드맵', '보고서', '플래시카드', '퀴즈', '인포그래픽', '데이터 표', '동영상 개요',
@@ -1744,6 +3079,7 @@
     ];
     const candidates = queryAllIncludingShadow(document.body, 'button, [role="button"], a[role="button"], [class*="tile"], [class*="card"], [class*="Tile"], [class*="Card"]');
     for (const btn of candidates) {
+      if (isInjectedStudioControl(btn)) continue;
       if (isInChatArea(btn)) continue;
       const text = (btn.textContent || '').trim();
       if (studioKeywords.some(k => text.includes(k))) {
@@ -1786,9 +3122,10 @@
   }
 
   /** 체크한 소스 행 클릭 → 본문 마크다운 추출 → storage 저장 → 새 탭 열기 → 해당 사이트 입력에 자동 붙여넣기 */
-  function createStudioActionButton(label, url, storageKey) {
+  function createStudioActionButton(label, url, storageKey, studioActionKey) {
     const wrap = document.createElement('div');
     wrap.setAttribute(STUDIO_BTN_MARKER, '1');
+    if (studioActionKey) wrap.setAttribute('data-scholar-studio-action', studioActionKey);
     wrap.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 10px 10px 15px;background:rgba(51,65,85,0.5);color:rgba(226,232,240,0.95);border-radius:12px;cursor:pointer;font-weight:600;font-size:13px;height:70px;min-height:70px;width:100%;min-width:0;border:1px solid rgba(71,85,105,0.4);transition:background 0.15s,transform 0.1s;box-sizing:border-box;';
     wrap.title = label === 'Scholar Slide'
       ? '체크한 소스를 마크다운으로 추출해 scholarslide.vercel.app 입력에 붙여넣기'
@@ -1861,7 +3198,218 @@
     return wrap;
   }
 
+  function getStudioButtonsHost(grid) {
+    if (!grid) return null;
+    return grid.querySelector(`[${STUDIO_BUTTONS_HOST_MARKER}="1"]`);
+  }
+
+  function removeAllStudioButtons() {
+    document.querySelectorAll('[data-scholar-studio-action="scholar-slide"],[data-scholar-studio-action="mdproviewer"]').forEach((el) => el.remove());
+    document.querySelectorAll(`[${STUDIO_BUTTONS_HOST_MARKER}="1"]`).forEach((host) => host.remove());
+  }
+// 주입된 버튼이 MutationObserver에서 재주입 루프 안 타도록 보호
+  function isStudioInjectedNode(node) {
+    if (!node || node.nodeType !== 1) return false;
+    if (node.id === STUDIO_VISIBILITY_STYLE_ID) return true;
+    if (node.matches?.('[data-scholar-studio-prompts="1"], [data-scholar-studio-action], [' + STUDIO_BUTTONS_HOST_MARKER + '="1"], [' + STUDIO_NOTE_ACTIONS_MARKER + '="1"], [' + STUDIO_NOTE_MENU_ACTION_MARKER + '="1"], [' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"], [' + KORTEX_PDF2PPT_MARKER + '="1"]')) return true;
+    return !!node.closest?.('[data-scholar-studio-prompts="1"], [data-scholar-studio-action], [' + STUDIO_BUTTONS_HOST_MARKER + '="1"], [' + STUDIO_NOTE_ACTIONS_MARKER + '="1"], [' + STUDIO_NOTE_MENU_ACTION_MARKER + '="1"], [' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"], [' + KORTEX_PDF2PPT_MARKER + '="1"]');
+  }
+
+  function shouldIgnoreStudioMutations(mutations) {
+    if (studioButtonsState.refreshing) return true;
+    return mutations.every((mutation) => {
+      if (isStudioInjectedNode(mutation.target)) return true;
+      const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes].filter((node) => node?.nodeType === 1);
+      return changedNodes.length > 0 && changedNodes.every((node) => isStudioInjectedNode(node));
+    });
+  }
+
+  function applyStudioButtonsHardVisibility() {
+    let styleEl = document.getElementById(STUDIO_VISIBILITY_STYLE_ID);
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = STUDIO_VISIBILITY_STYLE_ID;
+      document.documentElement.appendChild(styleEl);
+    }
+
+    const rules = [];
+    if (studioButtonsState.hideSlide) {
+      rules.push('[data-scholar-studio-action="scholar-slide"] { display: none !important; visibility: hidden !important; pointer-events: none !important; }');
+    }
+    if (studioButtonsState.hideMdPro) {
+      rules.push('[data-scholar-studio-action="mdproviewer"] { display: none !important; visibility: hidden !important; pointer-events: none !important; }');
+    }
+    styleEl.textContent = rules.join('\n');
+  }
+
+  function removeLegacyStudioButtons(grid) {
+    const selector = '[data-scholar-studio-action="scholar-slide"],[data-scholar-studio-action="mdproviewer"]';
+    document.querySelectorAll(selector).forEach((el) => {
+      if (!grid || !grid.contains(el) || el.parentElement?.getAttribute(STUDIO_BUTTONS_HOST_MARKER) !== '1') {
+        el.remove();
+      }
+    });
+  }
+
+  function createStudioButtonsHost() {
+    const host = document.createElement('div');
+    host.setAttribute(STUDIO_BUTTONS_HOST_MARKER, '1');
+    host.style.cssText = 'display:contents;';
+    return host;
+  }
+
+  function syncStudioButtonsVisibility(gridOverride) {
+    const hideSlide = studioButtonsState.hideSlide;
+    const hideMdPro = studioButtonsState.hideMdPro;
+    const grid = gridOverride || findStudioGrid();
+
+    if (!grid) {
+      removeAllStudioButtons();
+      return;
+    }
+
+    if (!hasVisibleNativeStudioTiles(grid)) {
+      removeAllStudioButtons();
+      return;
+    }
+
+    removeLegacyStudioButtons(grid);
+
+    if (hideSlide && hideMdPro) {
+      removeAllStudioButtons();
+      return;
+    }
+
+    let host = getStudioButtonsHost(grid);
+    if (!host) {
+      host = createStudioButtonsHost();
+      grid.appendChild(host);
+    } else if (host.parentElement !== grid) {
+      host.remove();
+      host = createStudioButtonsHost();
+      grid.appendChild(host);
+    }
+
+    const existingSlide = host.querySelector('[data-scholar-studio-action="scholar-slide"]');
+    const existingMdPro = host.querySelector('[data-scholar-studio-action="mdproviewer"]');
+
+    if (hideSlide) {
+      existingSlide?.remove();
+    } else if (!existingSlide) {
+      host.appendChild(createStudioActionButton('Scholar Slide', 'https://scholarslide.vercel.app/', 'scholarScholarSlidePaste', 'scholar-slide'));
+    }
+
+    if (hideMdPro) {
+      existingMdPro?.remove();
+    } else if (!existingMdPro) {
+      host.appendChild(createStudioActionButton('MDProViewer', 'https://mdproviewer.vercel.app/', 'scholarToMDPaste', 'mdproviewer'));
+    }
+
+    if (!host.children.length) {
+      host.remove();
+    }
+  }
+// 갱신 루프에 보기 버튼 동기화 포함:
+
+  function refreshStudioButtons() {
+    studioButtonsState.refreshPending = false;
+    studioButtonsState.refreshing = true;
+    try {
+      injectStudioPromptLauncher();
+      syncStudioButtonsVisibility();
+      syncStudioNoteActions();
+      syncStudioNoteInlineViewButtons();
+      syncStudioNoteMenuActions();
+    } finally {
+      requestAnimationFrame(() => {
+        studioButtonsState.refreshing = false;
+      });
+    }
+  }
+
+  function scheduleStudioButtonsRefresh() {
+    if (studioButtonsState.refreshPending) return;
+    studioButtonsState.refreshPending = true;
+    setTimeout(refreshStudioButtons, 180);
+  }
+
+  function stopStudioButtonsObserver() {
+    if (studioButtonsState.observer) {
+      studioButtonsState.observer.disconnect();
+      studioButtonsState.observer = null;
+    }
+  }
+
+  function ensureStudioButtonsObserver() {
+    if (studioButtonsState.observer) return;
+
+    studioButtonsState.observer = new MutationObserver((mutations) => {
+      if (shouldIgnoreStudioMutations(mutations)) return;
+      scheduleStudioButtonsRefresh();
+    });
+    studioButtonsState.observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function applyStudioButtonsVisibilityState(hideSlide, hideMdPro) {
+    const changed = studioButtonsState.hideSlide !== hideSlide || studioButtonsState.hideMdPro !== hideMdPro || !studioButtonsState.storageReady;
+    studioButtonsState.hideSlide = hideSlide;
+    studioButtonsState.hideMdPro = hideMdPro;
+    studioButtonsState.storageReady = true;
+    applyStudioButtonsHardVisibility();
+
+    ensureStudioButtonsObserver();
+
+    if (hideSlide && hideMdPro) {
+      removeAllStudioButtons();
+    }
+
+    if (changed) {
+      requestAnimationFrame(() => {
+        syncStudioButtonsVisibility();
+        requestAnimationFrame(() => syncStudioButtonsVisibility());
+      });
+    }
+  }
+
+  function loadStudioButtonsVisibilityFromStorage() {
+    try {
+      chrome.storage.local.get([STORAGE_HIDE_SCHOLAR_SLIDE_STUDIO, STORAGE_HIDE_MDPROVIEWER_STUDIO], (r) => {
+        if (chrome.runtime.lastError) {
+          applyStudioButtonsVisibilityState(true, true);
+          return;
+        }
+        applyStudioButtonsVisibilityState(
+          r[STORAGE_HIDE_SCHOLAR_SLIDE_STUDIO] !== false,
+          r[STORAGE_HIDE_MDPROVIEWER_STUDIO] !== false
+        );
+      });
+    } catch (_) {
+      applyStudioButtonsVisibilityState(true, true);
+    }
+  }
+
+  function registerStudioButtonsVisibilityStorageListener() {
+    try {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== 'local') return;
+        if (!changes[STORAGE_HIDE_SCHOLAR_SLIDE_STUDIO] && !changes[STORAGE_HIDE_MDPROVIEWER_STUDIO]) return;
+        applyStudioButtonsVisibilityState(
+          changes[STORAGE_HIDE_SCHOLAR_SLIDE_STUDIO]
+            ? changes[STORAGE_HIDE_SCHOLAR_SLIDE_STUDIO].newValue !== false
+            : studioButtonsState.hideSlide,
+          changes[STORAGE_HIDE_MDPROVIEWER_STUDIO]
+            ? changes[STORAGE_HIDE_MDPROVIEWER_STUDIO].newValue !== false
+            : studioButtonsState.hideMdPro
+        );
+      });
+    } catch (_) {}
+  }
+
   function injectStudioPromptLauncher() {
+    try {
+      document.querySelectorAll('[data-scholar-studio-prompts="1"]').forEach((el) => el.remove());
+    } catch (_) {}
+
     const container = findStudioPromptContainer();
     if (!container) return false;
     const closeBtn = findStudioPromptCloseButton(container);
@@ -1902,44 +3450,29 @@
     container.prepend(btn);
     return true;
   }
-
+// 갱신 루프에 보기 버튼 동기화 포함
   function injectStudioButtons() {
     injectStudioPromptLauncher();
-    const grid = findStudioGrid();
-    if (!grid) return false;
-    const existing = document.querySelectorAll(`[${STUDIO_BTN_MARKER}]`);
-    for (const el of existing) {
-      if (isInChatArea(el) || !isOnRightSide(el)) {
-        el.remove();
-      } else if (grid.contains(el)) {
-        return true;
-      }
-    }
-    if (grid.querySelector(`[${STUDIO_BTN_MARKER}]`)) return true;
-    const scholarSlide = createStudioActionButton('Scholar Slide', 'https://scholarslide.vercel.app/', 'scholarScholarSlidePaste');
-    const mdEditor = createStudioActionButton('MDProViewer', 'https://mdproviewer.vercel.app/', 'scholarToMDPaste');
-    grid.appendChild(scholarSlide);
-    grid.appendChild(mdEditor);
+    syncStudioButtonsVisibility();
+    syncStudioNoteActions();
+    syncStudioNoteInlineViewButtons();
+    syncStudioNoteMenuActions();
     return true;
   }
 
   function initStudioButtons() {
-    let refreshPending = false;
-    const refreshStudioUi = () => {
-      refreshPending = false;
-      injectStudioPromptLauncher();
-      injectStudioButtons();
-    };
-    const scheduleRefresh = () => {
-      if (refreshPending) return;
-      refreshPending = true;
-      setTimeout(refreshStudioUi, 250);
-    };
-    refreshStudioUi();
-    const obs = new MutationObserver(() => scheduleRefresh());
-    obs.observe(document.body, { childList: true, subtree: true });
-    setTimeout(scheduleRefresh, 1000);
-    setTimeout(scheduleRefresh, 3000);
+    if (studioButtonsState.initialized) return;
+    studioButtonsState.initialized = true;
+    bindStudioNoteMenuTracking();
+    ensureStudioButtonsObserver();
+    injectStudioPromptLauncher();
+    syncStudioNoteActions();
+    syncStudioNoteInlineViewButtons();
+    syncStudioNoteMenuActions();
+    loadStudioButtonsVisibilityFromStorage();
+    setTimeout(() => {
+      scheduleStudioButtonsRefresh();
+    }, 1000);
   }
 
   registerNotebookLMFeatureStorageListener();
@@ -1948,10 +3481,16 @@
 
   function runScholarNotebookLMInit() {
     init();
+    try { window.ScholarKortex?.init?.(); } catch (_) {}
     registerHideMDEditorHeaderStorageListener();
+    registerStudioButtonsVisibilityStorageListener();
     tryInitPromptsButton();
     setTimeout(initMessageActionButtons, 800);
-    setTimeout(initMessageActionButtons, 2500);
+    setTimeout(() => {
+      if (!document.querySelector('[data-scholar-msg-btns-injected="1"]')) {
+        initMessageActionButtons();
+      }
+    }, 2500);
     setTimeout(initStudioButtons, 1000);
     setTimeout(initStudioButtons, 4000);
   }

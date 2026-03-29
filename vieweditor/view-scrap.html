@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>스크랩 보기 에디터 - Scholar Assistant</title>
-    <script src="./lib/marked.min.js"></script>
+    <script src="../md_editor/lib/marked.min.js"></script>
     <style>
         * { box-sizing: border-box; }
         html, body { margin: 0; height: 100%; font-family: "Segoe UI", "Malgun Gothic", sans-serif; }
@@ -54,6 +54,8 @@
         .btn-close:hover { background: #64748b; }
         .btn-save { background: #2563eb; color: #fff; }
         .btn-save:hover { background: #1d4ed8; }
+        .btn-auto { padding: 6px 10px; min-width: 54px; background: #334155; color: #e2e8f0; border: 1px solid #475569; font-size: 11px; font-weight: 700; }
+        .btn-auto.on { background: #0f766e; border-color: #14b8a6; color: #ecfeff; }`r`n        .btn-auto:not(.on) { opacity: 0.7; }
         .toolbar {
             padding: 10px 16px;
             display: flex;
@@ -210,6 +212,7 @@
                 <span class="font-value" id="fontSizeValue">13px</span>
                 <button class="btn-tool" id="btnFontUp" type="button">A+</button>
             </div>
+            <button class="btn-auto on" id="btnAutoHrSpace" type="button" title="구분선(----) 위에 엔터(빈 줄) 자동 삽입">Tidy</button>
             <button class="btn-save" id="btnSaveInternal">저장</button>
             <button class="btn-close" id="btnClose">닫기</button>
         </div>
@@ -246,6 +249,7 @@
     </div>
     <div id="message-box" class="msg-toast">메시지</div>
     <script src="../confirm/confirm.js"></script>
+    <script src="../md_editor/special_ruls.js"></script>
 <script src="./view-scrap.js"></script>
 </body>
 </html>

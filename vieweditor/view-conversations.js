@@ -1,52 +1,48 @@
-/* Scholar Assistant - View Accumulated Scraps */
+/* Scholar Assistant - View Saved Conversations */
 
 const STORAGE_KEYS = {
-  accumulatedScraps: 'accumulatedScraps',
+  savedConversations: 'savedConversations',
   toMDPaste: 'scholarToMDPaste',
   tomdOpenType: 'tomdOpenType',
 };
 
-let accumulatedList = [];
+let conversationList = [];
 let sidebarOpen = false;
 
-function getItemPreviewText(content) {
+function getStorage() {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local) return null;
+  return {
+    get(keys) {
+      return new Promise((resolve, reject) => {
+        chrome.storage.local.get(keys, (data) => {
+          if (chrome.runtime?.lastError) reject(new Error(chrome.runtime.lastError.message));
+          else resolve(data || {});
+        });
+      });
+    },
+    set(items) {
+      return new Promise((resolve, reject) => {
+        chrome.storage.local.set(items, () => {
+          if (chrome.runtime?.lastError) reject(new Error(chrome.runtime.lastError.message));
+          else resolve();
+        });
+      });
+    }
+  };
+}
+
+function normalizeConversationText(content) {
   return String(content || '')
     .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+function getItemPreviewText(content) {
+  return normalizeConversationText(content)
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/\n+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-function renderOutline(list) {
-  const outline = document.getElementById('accumulated-outline');
-  const count = document.getElementById('sidebar-count');
-  if (!outline || !count) return;
-
-  count.textContent = `${list.length} items`;
-
-  if (!list.length) {
-    outline.innerHTML = '<div class="sidebar-empty">No saved scraps.</div>';
-    return;
-  }
-
-  outline.innerHTML = list.map((item, index) => {
-    const preview = escapeHtml(getItemPreviewText(item.content).slice(0, 90) || 'No preview');
-    return `
-      <button class="sidebar-item" type="button" data-target-id="${item.id}">
-        <span class="sidebar-item-num">#${index + 1}</span>
-        <span class="sidebar-item-preview">${preview}</span>
-      </button>
-    `;
-  }).join('');
-
-  outline.querySelectorAll('.sidebar-item').forEach((button) => {
-    button.addEventListener('click', () => {
-      const id = button.getAttribute('data-target-id');
-      const target = document.querySelector(`.scrap-item[data-id="${CSS.escape(String(id))}"]`);
-      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  });
 }
 
 function updateSidebarUi() {
@@ -60,62 +56,21 @@ function toggleSidebar(force) {
   updateSidebarUi();
 }
 
-function getStorage() {
-  return typeof chrome !== 'undefined' && chrome.storage?.local ? chrome.storage.local : null;
-}
-
-async function getAccumulatedScraps() {
+async function getSavedConversations() {
   const storage = getStorage();
   if (!storage) return [];
   try {
-    const data = await storage.get(STORAGE_KEYS.accumulatedScraps);
-    return data[STORAGE_KEYS.accumulatedScraps] || [];
+    const data = await storage.get(STORAGE_KEYS.savedConversations);
+    return data[STORAGE_KEYS.savedConversations] || [];
   } catch (_) {
     return [];
   }
 }
 
-async function setAccumulatedScraps(list) {
+async function setSavedConversations(list) {
   const storage = getStorage();
   if (!storage) return;
-  await storage.set({ [STORAGE_KEYS.accumulatedScraps]: list });
-}
-
-function makeNewAccumulatedItem() {
-  return {
-    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    ts: Date.now(),
-    content: '',
-    fontSize: 16,
-  };
-}
-
-async function createNewItem() {
-  const item = makeNewAccumulatedItem();
-  accumulatedList = [item, ...accumulatedList];
-  await setAccumulatedScraps(accumulatedList);
-  renderList(accumulatedList);
-
-  const root = document.querySelector(`.scrap-item[data-id="${CSS.escape(String(item.id))}"]`);
-  const body = root?.querySelector('.item-body');
-  if (body) {
-    body.focus();
-    const selection = window.getSelection();
-    if (selection) {
-      const range = document.createRange();
-      range.selectNodeContents(body);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-  }
-
-  showMessage('새 빈 항목이 생성되었습니다. 붙여넣기 후 저장하세요.');
-}
-
-async function getMergedContent() {
-  const list = await getAccumulatedScraps();
-  return list.length ? list.map((item) => item.content || '').join('\n\n---\n\n') : '';
+  await storage.set({ [STORAGE_KEYS.savedConversations]: list });
 }
 
 function escapeHtml(text) {
@@ -124,32 +79,66 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function getStatsText(item) {
+  const parts = [];
+  if (Number(item?.detectedMessageCount) > 0) parts.push(`Editor ${Number(item.detectedMessageCount)} msgs`);
+  if (Number(item?.collectedMessageCount) > 0) parts.push(`Collected ${Number(item.collectedMessageCount)} msgs`);
+  return parts.join(' / ');
+}
+
+async function getMergedContent() {
+  const list = await getSavedConversations();
+  if (!list.length) return '';
+  return list.map((item, index) => {
+    const stats = getStatsText(item);
+    const header = [`Conversation #${index + 1}`, new Date(item.ts || Date.now()).toLocaleString('ko-KR'), stats].filter(Boolean).join(' | ');
+    return `## ${header}\n\n${normalizeConversationText(item.content || '')}`;
+  }).join('\n\n---\n\n');
+}
+
+function renderOutline(list) {
+  const outline = document.getElementById('conversation-outline');
+  const count = document.getElementById('sidebar-count');
+  if (!outline || !count) return;
+
+  count.textContent = `${list.length} items`;
+  if (!list.length) {
+    outline.innerHTML = '<div class="sidebar-empty">No saved conversations.</div>';
+    return;
+  }
+
+  outline.innerHTML = list.map((item, index) => {
+    const stamp = escapeHtml(new Date(item.ts || Date.now()).toLocaleTimeString('ko-KR'));
+    return `
+      <button class="sidebar-item" type="button" data-target-id="${item.id}">
+        <span class="sidebar-item-num">#${index + 1}</span>
+        <span class="sidebar-item-preview">${stamp}</span>
+      </button>
+    `;
+  }).join('');
+
+  outline.querySelectorAll('.sidebar-item').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.getAttribute('data-target-id');
+      document.querySelector(`.conversation-item[data-id="${CSS.escape(String(id))}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
 function contentEditableHtmlToText(html) {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = html || '';
-
   const walk = (node) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      return node.nodeValue || '';
-    }
-    if (node.nodeType !== Node.ELEMENT_NODE) {
-      return '';
-    }
-
-    const tag = node.tagName;
-    if (tag === 'BR') return '\n';
-
+    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || '';
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    if (node.tagName === 'BR') return '\n';
     let text = '';
-    node.childNodes.forEach((child) => {
-      text += walk(child);
-    });
-
-    if (tag === 'DIV' || tag === 'P' || tag === 'LI') {
+    node.childNodes.forEach((child) => { text += walk(child); });
+    if (node.tagName === 'DIV' || node.tagName === 'P' || node.tagName === 'LI') {
       if (!text.endsWith('\n')) text += '\n';
     }
     return text;
   };
-
   return walk(wrapper)
     .replace(/\r\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -160,16 +149,12 @@ function contentEditableHtmlToText(html) {
 function insertLineBreakAtCursor() {
   const selection = window.getSelection();
   if (!selection || !selection.rangeCount) return false;
-
   const range = selection.getRangeAt(0);
   range.deleteContents();
-
   const br = document.createElement('br');
   range.insertNode(br);
-
   const spacer = document.createTextNode('');
   br.parentNode?.insertBefore(spacer, br.nextSibling);
-
   range.setStartAfter(br);
   range.collapse(true);
   selection.removeAllRanges();
@@ -180,17 +165,14 @@ function insertLineBreakAtCursor() {
 function insertPlainTextAtCursor(text) {
   const selection = window.getSelection();
   if (!selection || !selection.rangeCount) return false;
-
   const range = selection.getRangeAt(0);
   range.deleteContents();
-
   const fragment = document.createDocumentFragment();
   const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
   lines.forEach((line, index) => {
     if (index > 0) fragment.appendChild(document.createElement('br'));
     if (line) fragment.appendChild(document.createTextNode(line));
   });
-
   range.insertNode(fragment);
   range.collapse(false);
   selection.removeAllRanges();
@@ -228,17 +210,17 @@ async function copyToClipboardAsync(text) {
 function downloadContent(ext) {
   getMergedContent().then((content) => {
     if (!content) {
-      showMessage('저장된 스크랩이 없습니다.');
+      showMessage('No saved conversations.');
       return;
     }
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `scholar_accumulated_${Date.now()}.${ext}`;
+    a.download = `scholar_conversations_${Date.now()}.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
-    showMessage(`${ext.toUpperCase()} 파일로 저장했습니다.`);
+    showMessage(`${ext.toUpperCase()} saved.`);
   });
 }
 
@@ -258,13 +240,13 @@ function openExternal(url) {
 }
 
 function confirmToMDSave(url) {
-  return window.ScholarConfirm?.confirmExternalToMD?.(url, window.confirm.bind(window)) ?? window.confirm('Would you like to save this clipping?');
+  return window.ScholarConfirm?.confirmExternalToMD?.(url, window.confirm.bind(window)) ?? window.confirm('Would you like to save these conversations?');
 }
 
 async function sendToMD() {
   const content = await getMergedContent();
   if (!content) {
-    showMessage('저장된 스크랩이 없습니다.');
+    showMessage('No saved conversations.');
     return;
   }
   const storage = getStorage();
@@ -278,30 +260,7 @@ async function sendToMD() {
   await copyToClipboardAsync(content);
   await new Promise((resolve) => setTimeout(resolve, 120));
   openExternal(url);
-  showMessage('누적 스크랩을 편집기로 보냈습니다.');
-}
-
-async function deleteItem(id) {
-  if (!window.confirm('삭제하시겠습니까?')) {
-    return;
-  }
-
-  const next = accumulatedList.filter((item) => String(item.id) !== String(id));
-  accumulatedList = next;
-  await setAccumulatedScraps(next);
-  renderList(next);
-  showMessage('삭제되었습니다.');
-}
-
-async function saveItem(id) {
-  const item = accumulatedList.find((entry) => String(entry.id) === String(id));
-  const root = document.querySelector(`.scrap-item[data-id="${CSS.escape(String(id))}"]`);
-  const body = root?.querySelector('.item-body');
-  if (!item || !body) return;
-  item.content = body.dataset.raw ?? contentEditableHtmlToText(body.innerHTML);
-  body.dataset.raw = item.content;
-  await setAccumulatedScraps(accumulatedList);
-  showMessage('저장했습니다.');
+  showMessage('Saved conversations sent to ToMD.');
 }
 
 function getItemFontSize(item) {
@@ -310,35 +269,32 @@ function getItemFontSize(item) {
 }
 
 async function changeItemFontSize(id, delta) {
-  const item = accumulatedList.find((entry) => String(entry.id) === String(id));
-  const root = document.querySelector(`.scrap-item[data-id="${CSS.escape(String(id))}"]`);
+  const item = conversationList.find((entry) => String(entry.id) === String(id));
+  const root = document.querySelector(`.conversation-item[data-id="${CSS.escape(String(id))}"]`);
   const body = root?.querySelector('.item-body');
   const value = root?.querySelector('.font-size-value');
   if (!item || !body || !value) return;
   item.fontSize = Math.min(24, Math.max(12, getItemFontSize(item) + delta));
   body.style.fontSize = `${item.fontSize}px`;
   value.textContent = `${item.fontSize}px`;
-  await setAccumulatedScraps(accumulatedList);
+  await setSavedConversations(conversationList);
 }
 
 function renderBodyAsMarkdown(body, content) {
-  if (typeof marked !== 'undefined' && marked.parse) {
-    body.innerHTML = marked.parse(content || '', { breaks: true });
-  } else {
-    body.textContent = content || '';
-  }
+  if (typeof marked !== 'undefined' && marked.parse) body.innerHTML = marked.parse(content || '', { breaks: true });
+  else body.textContent = content || '';
   body.classList.add('preview');
   body.contentEditable = 'false';
 }
 
 function renderBodyAsText(body, content) {
   body.classList.remove('preview');
-  body.textContent = content || '';
+  body.textContent = normalizeConversationText(content || '');
   body.contentEditable = 'true';
 }
 
 function toggleItemView(id) {
-  const root = document.querySelector(`.scrap-item[data-id="${CSS.escape(String(id))}"]`);
+  const root = document.querySelector(`.conversation-item[data-id="${CSS.escape(String(id))}"]`);
   const body = root?.querySelector('.item-body');
   const btn = root?.querySelector('.btn-md');
   if (!body || !btn) return;
@@ -346,47 +302,74 @@ function toggleItemView(id) {
   const previewing = body.dataset.mode === 'preview';
   if (previewing) {
     renderBodyAsText(body, raw);
-    body.style.fontSize = `${getItemFontSize(accumulatedList.find((entry) => String(entry.id) === String(id)))}px`;
+    body.style.fontSize = `${getItemFontSize(conversationList.find((entry) => String(entry.id) === String(id)))}px`;
     body.dataset.mode = 'edit';
-    btn.textContent = 'MD보기';
+    btn.textContent = 'MD View';
   } else {
     body.dataset.raw = raw;
     renderBodyAsMarkdown(body, raw);
-    body.style.fontSize = `${getItemFontSize(accumulatedList.find((entry) => String(entry.id) === String(id))) + 1}px`;
+    body.style.fontSize = `${getItemFontSize(conversationList.find((entry) => String(entry.id) === String(id))) + 1}px`;
     body.dataset.mode = 'preview';
-    btn.textContent = '편집';
+    btn.textContent = 'Edit';
   }
 }
 
+async function saveItem(id) {
+  const item = conversationList.find((entry) => String(entry.id) === String(id));
+  const root = document.querySelector(`.conversation-item[data-id="${CSS.escape(String(id))}"]`);
+  const body = root?.querySelector('.item-body');
+  if (!item || !body) return;
+  item.content = normalizeConversationText(body.dataset.raw ?? contentEditableHtmlToText(body.innerHTML));
+  body.dataset.raw = item.content;
+  renderBodyAsText(body, item.content);
+  body.dataset.mode = 'edit';
+  root?.querySelector('.btn-md')?.replaceChildren(document.createTextNode('MD View'));
+  await setSavedConversations(conversationList);
+  renderOutline(conversationList);
+  showMessage('Conversation updated.');
+}
+
+async function deleteItem(id) {
+  if (!window.confirm('Delete this saved conversation?')) return;
+  conversationList = conversationList.filter((item) => String(item.id) !== String(id));
+  await setSavedConversations(conversationList);
+  renderList(conversationList);
+  showMessage('Conversation deleted.');
+}
 
 function renderList(list) {
-  const container = document.getElementById('accumulated-display');
+  const container = document.getElementById('conversation-display');
   if (!container) return;
-  renderOutline(list);
-
   if (!list.length) {
-    container.textContent = '저장된 스크랩이 없습니다.';
+    container.textContent = 'No saved conversations.';
     container.classList.add('content-empty');
+    renderOutline(list);
     return;
   }
+
   container.classList.remove('content-empty');
+  renderOutline(list);
   container.innerHTML = list.map((item, index) => {
-    const raw = String(item.content || '');
+    const raw = normalizeConversationText(String(item.content || ''));
     const fontSize = getItemFontSize(item);
+    const stats = escapeHtml(getStatsText(item));
     return `
-      <div class="scrap-item" data-id="${item.id}">
-        <div class="scrap-item-header">
-          <div class="scrap-title">
-            <span>#${index + 1}</span>
-            <span class="scrap-meta">${new Date(item.ts || Date.now()).toLocaleString('ko-KR')}</span>
+      <div class="conversation-item" data-id="${item.id}">
+        <div class="conversation-item-header">
+          <div class="conversation-title">
+            <div class="conversation-main-meta">
+              <span>#${index + 1}</span>
+              <span class="conversation-meta">${new Date(item.ts || Date.now()).toLocaleString('ko-KR')}</span>
+            </div>
+            ${stats ? `<div class="conversation-stats">${stats}</div>` : ''}
           </div>
-          <div class="header-actions">
-            <button class="btn-md" data-id="${item.id}" type="button">MD보기</button>
+          <div class="header-actions-row">
+            <button class="btn-md" data-id="${item.id}" type="button">MD View</button>
             <button class="btn-font" data-id="${item.id}" data-font-action="down" type="button">A-</button>
             <span class="font-size-value" style="align-self:center;min-width:36px;text-align:center;font-size:11px;color:#94a3b8;">${fontSize}px</span>
             <button class="btn-font" data-id="${item.id}" data-font-action="up" type="button">A+</button>
-            <button class="btn-save" data-id="${item.id}" type="button">저장</button>
-            <button class="btn-delete" data-id="${item.id}" type="button">삭제</button>
+            <button class="btn-save" data-id="${item.id}" type="button">Save</button>
+            <button class="btn-delete" data-id="${item.id}" type="button">Delete</button>
           </div>
         </div>
         <div class="item-body" data-mode="edit" data-raw="${escapeHtml(raw)}" contenteditable="true" style="font-size:${fontSize}px;">${escapeHtml(raw)}</div>
@@ -394,43 +377,33 @@ function renderList(list) {
     `;
   }).join('');
 
-  container.querySelectorAll('.btn-md').forEach((btn) => {
-    btn.addEventListener('click', () => toggleItemView(btn.getAttribute('data-id')));
-  });
-  container.querySelectorAll('.btn-save').forEach((btn) => {
-    btn.addEventListener('click', () => saveItem(btn.getAttribute('data-id')));
-  });
+  container.querySelectorAll('.btn-md').forEach((btn) => btn.addEventListener('click', () => toggleItemView(btn.getAttribute('data-id'))));
+  container.querySelectorAll('.btn-save').forEach((btn) => btn.addEventListener('click', () => saveItem(btn.getAttribute('data-id'))));
+  container.querySelectorAll('.btn-delete').forEach((btn) => btn.addEventListener('click', () => deleteItem(btn.getAttribute('data-id'))));
   container.querySelectorAll('.btn-font').forEach((btn) => {
     btn.addEventListener('click', () => {
       const delta = btn.getAttribute('data-font-action') === 'up' ? 1 : -1;
       changeItemFontSize(btn.getAttribute('data-id'), delta);
     });
   });
-  container.querySelectorAll('.btn-delete').forEach((btn) => {
-    btn.addEventListener('click', () => deleteItem(btn.getAttribute('data-id')));
-  });
 
   container.querySelectorAll('.item-body').forEach((body) => {
     body.addEventListener('keydown', (event) => {
       if (body.dataset.mode === 'preview') return;
       if (event.key !== 'Enter') return;
-
       event.preventDefault();
       insertLineBreakAtCursor();
       body.dataset.raw = contentEditableHtmlToText(body.innerHTML);
       body.dataset.mode = 'edit';
     });
-
     body.addEventListener('paste', (event) => {
       if (body.dataset.mode === 'preview') return;
       event.preventDefault();
-
       const text = event.clipboardData?.getData('text/plain') || '';
       insertPlainTextAtCursor(text);
       body.dataset.raw = contentEditableHtmlToText(body.innerHTML);
       body.dataset.mode = 'edit';
     });
-
     body.addEventListener('input', () => {
       body.dataset.raw = contentEditableHtmlToText(body.innerHTML);
       body.dataset.mode = 'edit';
@@ -438,20 +411,26 @@ function renderList(list) {
   });
 }
 
-
-
+async function refreshConversationView() {
+  conversationList = await getSavedConversations();
+  renderList(conversationList);
+}
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.action === 'clearOnNotebookExit') window.close();
   });
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-  accumulatedList = await getAccumulatedScraps();
-  updateSidebarUi();
-  renderList(accumulatedList);
+if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes[STORAGE_KEYS.savedConversations]) return;
+    refreshConversationView().catch(() => {});
+  });
+}
 
-  document.getElementById('btnNew')?.addEventListener('click', createNewItem);
+document.addEventListener('DOMContentLoaded', async () => {
+  await refreshConversationView();
+  updateSidebarUi();
   document.getElementById('btnClose')?.addEventListener('click', () => window.close());
   document.getElementById('btnToggleSidebar')?.addEventListener('click', () => toggleSidebar());
   document.getElementById('btnSaveTxt')?.addEventListener('click', () => downloadContent('txt'));

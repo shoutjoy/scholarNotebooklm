@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>학술도구</title>
+  <title>동작 도구</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -81,9 +81,9 @@
       <input type="checkbox" id="chkGeneralPrompt" />
       <span>General Prompt</span>
     </label>
-    <button type="button" class="btn-open" id="btnOpenPrompts" title="프롬프트 관리 창">열기</button>
+    <button type="button" class="btn-open" id="btnOpenPrompts" title="프롬프트 관리 창 열기">열기</button>
   </div>
-  <p class="hint">크롬 어디서나 프롬프트만 별도 창으로 사용</p>
+  <p class="hint">Edge 어디서나 프롬프트만 별도 창으로 사용</p>
 
   <div class="divider"></div>
 
@@ -92,9 +92,9 @@
       <input type="checkbox" id="chkScholarNotebookLM" />
       <span>Scholar NotebookLM</span>
     </label>
-    <button type="button" class="btn-open" id="btnToggleSidebar" title="NotebookLM 내 사이드바">패널</button>
+    <button type="button" class="btn-open" id="btnToggleSidebar" title="NotebookLM 패널">패널</button>
   </div>
-  <p class="hint">NotebookLM 페이지에 패널·헤더 버튼 표시 (끄면 UI 제거)</p>
+  <p class="hint">NotebookLM 페이지에 패널-헤더 버튼 표시 (교면 UI 제거)</p>
 
   <div class="divider"></div>
 
@@ -106,6 +106,15 @@
     <button type="button" class="btn-open" id="btnOpenMD" title="Markdown Pro Viewer">열기</button>
   </div>
   <p class="hint">mdproviewer.vercel.app 새 탭</p>
+
+  <div class="row">
+    <label>
+      <input type="checkbox" id="chkPdf2pptMake" />
+      <span>pdf2ppt Make</span>
+    </label>
+    <button type="button" class="btn-open" id="btnOpenPdf2pptMake" title="pdf2ppt Make">열기</button>
+  </div>
+  <p class="hint">pdf2pptmake.onrender.com 새 탭</p>
 
   <script src="action-popup.js"></script>
 </body>

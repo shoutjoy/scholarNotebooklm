@@ -13,7 +13,8 @@ function isManagedExtensionUrl(url) {
   return url.startsWith(base) && (
     url.includes('popup.html') ||
     url.includes('prompts/prompts.html') ||
-    url.includes('vieweditor/')
+    url.includes('vieweditor/') ||
+    url.includes('md_editor/')
   );
 }
 
@@ -40,13 +41,13 @@ async function closeManagedExtensionWindows() {
 async function focusOrCreateWindowByUrl(targetUrl, options = {}) {
   const width = Math.floor(Number(options.width) || 1200);
   const height = Math.floor(Number(options.height) || 850);
-  const isInternalView = typeof targetUrl === 'string' && targetUrl.includes('vieweditor/index.html');
+  const isInternalView = typeof targetUrl === 'string' && targetUrl.includes('md_editor/index.html');
   const windows = await chrome.windows.getAll({ populate: true });
 
   for (const win of windows) {
     for (const tab of win.tabs || []) {
       if (!tab?.url) continue;
-      const sameTarget = isInternalView ? tab.url.includes('vieweditor/index.html') : tab.url === targetUrl;
+      const sameTarget = isInternalView ? tab.url.includes('md_editor/index.html') : tab.url === targetUrl;
       if (!sameTarget) continue;
 
       await chrome.windows.update(win.id, { focused: true, state: 'normal' }).catch(() => {});
@@ -90,14 +91,19 @@ function openPopupWindow(position) {
 
 function ensureFeatureDefaults() {
   chrome.storage.local.get(
-    ['scholarFeatureGeneralPrompt', 'scholarFeatureNotebookLM', 'scholarFeatureMDEditor', 'hideMDEditorHeader'],
+    ['scholarFeatureGeneralPrompt', 'scholarFeatureNotebookLM', 'scholarFeatureMDEditor', 'hideConversationSave', 'hideMDEditorHeader', 'hideScholarSlideStudio', 'hideMDProViewerStudio', 'tomdOpenType', 'scrapResponseFormat'],
     (d) => {
       if (chrome.runtime.lastError) return;
       const patch = {};
       if (d.scholarFeatureGeneralPrompt === undefined) patch.scholarFeatureGeneralPrompt = true;
       if (d.scholarFeatureNotebookLM === undefined) patch.scholarFeatureNotebookLM = true;
       if (d.scholarFeatureMDEditor === undefined) patch.scholarFeatureMDEditor = true;
+      if (d.hideConversationSave === undefined) patch.hideConversationSave = true;
       if (d.hideMDEditorHeader === undefined) patch.hideMDEditorHeader = true;
+      if (d.hideScholarSlideStudio === undefined) patch.hideScholarSlideStudio = true;
+      if (d.hideMDProViewerStudio === undefined) patch.hideMDProViewerStudio = true;
+      if (d.tomdOpenType === undefined) patch.tomdOpenType = 'external';
+      if (d.scrapResponseFormat === undefined) patch.scrapResponseFormat = 'answer_only';
       if (Object.keys(patch).length) chrome.storage.local.set(patch);
     }
   );
@@ -143,14 +149,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: true });
   } else if (message.action === 'openToMD') {
     const targetUrl = message.url || 'https://mdproviewer.vercel.app/';
-    if (targetUrl.includes('vieweditor/index.html')) {
+    if (targetUrl.includes('md_editor/index.html')) {
       focusOrCreateWindowByUrl(targetUrl, { width: 1200, height: 850 }).then(() => sendResponse({ ok: true })).catch(e => sendResponse({ ok: false, err: String(e) }));
     } else {
       chrome.tabs.create({ url: targetUrl }).then(() => sendResponse({ ok: true })).catch(e => sendResponse({ ok: false, err: String(e) }));
     }
     return true;
   } else if (message.action === 'openExternalPaste' && message.url) {
-    if (message.url.includes('vieweditor/index.html')) {
+    if (message.url.includes('md_editor/index.html')) {
       focusOrCreateWindowByUrl(message.url, { width: 1200, height: 850 }).then(() => sendResponse({ ok: true })).catch(e => sendResponse({ ok: false, err: String(e) }));
     } else {
       chrome.tabs.create({ url: message.url }).then(() => sendResponse({ ok: true })).catch(e => sendResponse({ ok: false, err: String(e) }));

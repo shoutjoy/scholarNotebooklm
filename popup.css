@@ -5,6 +5,9 @@
 
         html {
             font-size: clamp(11px, 1.8vw + 6px, 16px);
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
         }
 
         body {
@@ -15,7 +18,7 @@
             min-height: 400px;
             width: 100%;
             height: 100%;
-            overflow-x: hidden;
+            overflow: hidden;
             transition: background 0.3s, color 0.3s;
         }
 
@@ -34,6 +37,7 @@
             display: flex;
             flex-direction: column;
             height: 100%;
+            min-width: 0;
             min-height: 0;
         }
 
@@ -111,6 +115,11 @@
 
         .rail-btn-explore {
             background: #7c3aed;
+            color: #fff;
+        }
+
+        .rail-btn-theme {
+            background: #0ea5e9;
             color: #fff;
         }
 
@@ -193,6 +202,18 @@
         body.popup-sidebar-compact .btn-prompts {
             padding: 0.3rem 0.45rem;
             font-size: 0.65rem;
+        }
+
+        body.popup-sidebar-compact .btn-settings-icon {
+            width: 1.85rem;
+            height: 1.85rem;
+            min-width: 1.85rem;
+            padding: 0;
+        }
+
+        body.popup-sidebar-compact .btn-settings-icon-svg {
+            width: 16px;
+            height: 16px;
         }
 
         body.popup-sidebar-compact .theme-toggle #themeLabel {
@@ -324,20 +345,76 @@
             background: #d1d5db;
         }
 
+        .sidebar-theme-mini {
+            padding: 0.22rem 0.45rem;
+            border-radius: 0.4rem;
+            font-size: 0.62rem;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            line-height: 1.2;
+            min-width: 44px;
+        }
+
+        body[data-theme="dark"] .sidebar-theme-mini {
+            background: #334155;
+            color: #cbd5e1;
+        }
+
+        body[data-theme="dark"] .sidebar-theme-mini:hover {
+            background: #475569;
+            color: #f1f5f9;
+        }
+
+        body[data-theme="light"] .sidebar-theme-mini {
+            background: #e5e7eb;
+            color: #4b5563;
+        }
+
+        body[data-theme="light"] .sidebar-theme-mini:hover {
+            background: #d1d5db;
+            color: #1f2937;
+        }
+
+        /* 설정: 톱니 아이콘 — flex로 아이콘 중앙 정렬 */
+        .btn-settings-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.15rem;
+            height: 2.15rem;
+            min-width: 2.15rem;
+            padding: 0;
+            flex-shrink: 0;
+        }
+
+        .btn-settings-icon-svg {
+            display: block;
+            flex-shrink: 0;
+        }
+
         .main {
             display: flex;
             flex: 1;
             overflow: hidden;
+            min-width: 0;
             min-height: 0;
             --left-panel-width: 70%;
         }
 
         .left-panel {
             width: var(--left-panel-width, 70%);
+            flex: 0 0 var(--left-panel-width, 70%);
+            min-width: 0;
+            min-height: 0;
             flex-shrink: 0;
             overflow-y: auto;
             padding: 0.75rem;
             transition: background 0.3s, border-color 0.3s;
+        }
+
+        .left-panel-full {
+            min-width: 0;
         }
 
         body[data-theme="dark"] .left-panel {
@@ -372,8 +449,10 @@
             display: flex;
             flex-direction: column;
             padding: 0.75rem;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
             min-width: 0;
+            min-height: 0;
             transition: background 0.3s;
         }
 
@@ -587,9 +666,9 @@ body[data-theme="light"] textarea:focus {
 
 /* Main prompt input: make the initial editor area taller for easier review */
 #promptInput {
-    min-height: 260px;
+    min-height: clamp(180px, 34vh, 260px);
     resize: vertical;
-    max-height: min(70vh, 720px);
+    max-height: min(48vh, 420px);
 }
 
 .btn-execute {

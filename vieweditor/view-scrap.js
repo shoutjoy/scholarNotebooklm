@@ -5,9 +5,11 @@ const STORAGE_KEYS = {
   toMDPaste: 'scholarToMDPaste',
   previewWidth: 'viewScrapPreviewWidth',
   fontSize: 'viewScrapFontSize',
+  specialRules: 'viewScrapSpecialRules',
 };
 
 let previewVisible = false;
+let specialRules = { doubleSpaceBeforeDivider: true };
 
 function getStorage() {
   return typeof chrome !== 'undefined' && chrome.storage?.local ? chrome.storage.local : null;
@@ -17,12 +19,13 @@ async function loadScrapContent() {
   const storage = getStorage();
   if (!storage) return '';
   try {
-    const data = await storage.get([STORAGE_KEYS.scrappedContent, STORAGE_KEYS.previewWidth, STORAGE_KEYS.fontSize]);
+    const data = await storage.get([STORAGE_KEYS.scrappedContent, STORAGE_KEYS.previewWidth, STORAGE_KEYS.fontSize, STORAGE_KEYS.specialRules]);
     const width = data[STORAGE_KEYS.previewWidth];
     if (typeof width === 'number') {
       document.getElementById('contentLayout')?.style.setProperty('--editor-width', `${width}%`);
     }
     applyFontSize(data[STORAGE_KEYS.fontSize]);
+    applySpecialRulesState(data[STORAGE_KEYS.specialRules] || {});
     return data[STORAGE_KEYS.scrappedContent] || '';
   } catch (_) {
     return '';
@@ -44,6 +47,69 @@ function getContent() {
   return getTextarea()?.value || '';
 }
 
+function getCurrentRules() {
+  return {
+    ...(window.SpecialRuls?.DEFAULT_RULES || {}),
+    ...(specialRules || {}),
+  };
+}
+
+function applySpecialRulesState(nextRules = {}) {
+  specialRules = {
+    ...getCurrentRules(),
+    ...(nextRules || {}),
+  };
+  const btn = document.getElementById('btnAutoHrSpace');
+  if (btn) {
+    const on = specialRules.doubleSpaceBeforeDivider !== false;
+    btn.classList.toggle('on', on);
+    btn.textContent = 'Tidy';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.title = on ? 'Tidy ON: 구분선 위에 엔터(빈 줄) 자동 삽입' : 'Tidy OFF';
+  }
+}
+
+function applySpecialRulesContent(content) {
+  const text = String(content || '');
+  if (window.SpecialRuls?.applyRules) {
+    return window.SpecialRuls.applyRules(text, getCurrentRules());
+  }
+  return text;
+}
+
+function getProcessedContent() {
+  return applySpecialRulesContent(getContent());
+}
+
+function syncProcessedContentToTextarea() {
+  const ta = getTextarea();
+  if (!ta) return false;
+  const before = ta.value;
+  const next = applySpecialRulesContent(before);
+  if (next === before) return false;
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const delta = next.length - before.length;
+  ta.value = next;
+  ta.setSelectionRange(Math.max(0, start + delta), Math.max(0, end + delta));
+  return true;
+}
+
+async function persistSpecialRules() {
+  const storage = getStorage();
+  if (!storage) return;
+  await storage.set({ [STORAGE_KEYS.specialRules]: specialRules });
+}
+
+async function toggleTidyRule() {
+  const current = getCurrentRules().doubleSpaceBeforeDivider !== false;
+  applySpecialRulesState({ doubleSpaceBeforeDivider: !current });
+  if (syncProcessedContentToTextarea()) {
+    renderMarkdown();
+    await saveScrapContent(getContent());
+  }
+  await persistSpecialRules();
+}
 function showMessage(text) {
   const box = document.getElementById('message-box');
   if (!box) return;
@@ -75,7 +141,8 @@ async function copyToClipboardAsync(text) {
 }
 
 function downloadContent(ext) {
-  const content = getContent();
+  syncProcessedContentToTextarea();
+  const content = getProcessedContent();
   if (!content) {
     showMessage('저장할 내용이 없습니다.');
     return;
@@ -91,7 +158,7 @@ function downloadContent(ext) {
 }
 
 function openExternal(url) {
-  const isInternal = url && url.includes('vieweditor/index.html');
+  const isInternal = url && url.includes('md_editor/index.html');
   try {
     if (isInternal && typeof chrome !== 'undefined' && chrome.windows?.create) {
       chrome.windows.create({ url, type: 'popup', width: 1200, height: 850 });
@@ -140,7 +207,8 @@ async function changeFontSize(delta) {
 }
 
 async function saveInternal() {
-  const content = getContent();
+  syncProcessedContentToTextarea();
+  const content = getProcessedContent();
   await saveScrapContent(content);
   showMessage('내부 저장소에 저장했습니다.');
 }
@@ -322,7 +390,8 @@ function confirmToMDSave(url) {
 }
 
 async function sendToMD() {
-  const content = getContent();
+  syncProcessedContentToTextarea();
+  const content = getProcessedContent();
   if (!content) {
     showMessage('내용이 없습니다.');
     return;
@@ -332,7 +401,7 @@ async function sendToMD() {
   if (storage) {
     await storage.set({ [STORAGE_KEYS.toMDPaste]: content });
     const data = await storage.get('tomdOpenType');
-    if (data.tomdOpenType !== 'external') url = chrome.runtime.getURL('vieweditor/index.html');
+    if (data.tomdOpenType !== 'external') url = chrome.runtime.getURL('md_editor/index.html');
   }
   if (!confirmToMDSave(url)) return false;
   await saveScrapContent(content);
@@ -352,14 +421,21 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   applyFontSize(13);
+  applySpecialRulesState({ doubleSpaceBeforeDivider: true });
   const ta = getTextarea();
   const content = await loadScrapContent();
   if (ta) {
-    ta.value = content || '';
+    ta.value = applySpecialRulesContent(content || '');
     ta.placeholder = content ? '' : '스크랩 내용이 없습니다. 스크랩 버튼으로 NotebookLM 내용을 가져오세요.';
     ta.addEventListener('input', () => {
       renderMarkdown();
       saveScrapContent(ta.value);
+    });
+    ta.addEventListener('blur', async () => {
+      if (syncProcessedContentToTextarea()) {
+        renderMarkdown();
+        await saveScrapContent(ta.value);
+      }
     });
   }
 
@@ -379,4 +455,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnToMD')?.addEventListener('click', sendToMD);
   document.getElementById('btnFontDown')?.addEventListener('click', () => changeFontSize(-1));
   document.getElementById('btnFontUp')?.addEventListener('click', () => changeFontSize(1));
+  document.getElementById('btnAutoHrSpace')?.addEventListener('click', toggleTidyRule);
 });
