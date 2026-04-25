@@ -213,6 +213,17 @@ async function saveInternal() {
   showMessage('내부 저장소에 저장했습니다.');
 }
 
+async function copyEditorToClipboard() {
+  syncProcessedContentToTextarea();
+  const text = getProcessedContent();
+  if (!String(text || '').trim()) {
+    showMessage('복사할 내용이 없습니다.');
+    return;
+  }
+  await copyToClipboardAsync(text);
+  showMessage('클립보드에 복사했습니다.');
+}
+
 function snapshotEditorState() {
   const ta = getTextarea();
   const previewArea = document.getElementById('previewArea');
@@ -411,6 +422,59 @@ async function sendToMD() {
   showMessage('ToMD로 보냈습니다. 자동 붙여넣기 또는 Ctrl+V로 붙여넣기 하세요.');
 }
 
+/** MD 미리보기(#previewArea)와 동일한 렌더 결과를 단일 HTML 문서로 묶어 저장 */
+function buildStandaloneHtmlFromRenderedBody(innerBodyHtml) {
+  const baseStyles = `
+    body { font-family: "Segoe UI", "Malgun Gothic", sans-serif; margin: 24px 32px; max-width: 52rem;
+      background: #f8fafc; color: #0f172a; font-size: 15px; line-height: 1.75; }
+    h1, h2, h3 { margin-top: 1.3em; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #cbd5e1; padding: 6px 8px; }
+    blockquote { margin: 12px 0; padding: 8px 12px; border-left: 4px solid #2563eb; background: #e0e7ff; color: #334155; }
+    img { max-width: 100%; height: auto; }
+    pre { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; }
+    code { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; }
+    pre code { font-size: inherit; }
+  `;
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scholar 스크랩</title>
+  <style>${baseStyles}</style>
+</head>
+<body>
+${innerBodyHtml}
+</body>
+</html>`;
+}
+
+function saveRenderedHtml() {
+  syncProcessedContentToTextarea();
+  const md = getProcessedContent();
+  if (!String(md || '').trim()) {
+    showMessage('저장할 내용이 없습니다.');
+    return;
+  }
+  renderMarkdown();
+  const previewArea = document.getElementById('previewArea');
+  if (!previewArea) {
+    showMessage('미리보기 영역을 찾을 수 없습니다.');
+    return;
+  }
+  const inner = previewArea.innerHTML;
+  const full = buildStandaloneHtmlFromRenderedBody(inner);
+  const blob = new Blob([full], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `scholar_scrap_${Date.now()}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showMessage('렌더링된 내용을 HTML 파일로 저장했습니다.');
+}
+
 
 
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
@@ -449,10 +513,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('btnClose')?.addEventListener('click', () => window.close());
   document.getElementById('btnSaveInternal')?.addEventListener('click', saveInternal);
+  document.getElementById('btnCopyContent')?.addEventListener('click', copyEditorToClipboard);
   document.getElementById('btnSaveTxt')?.addEventListener('click', () => downloadContent('txt'));
   document.getElementById('btnSaveMd')?.addEventListener('click', () => downloadContent('md'));
   document.getElementById('btnTogglePreview')?.addEventListener('click', togglePreview);
   document.getElementById('btnToMD')?.addEventListener('click', sendToMD);
+  document.getElementById('btnSaveHtml')?.addEventListener('click', saveRenderedHtml);
   document.getElementById('btnFontDown')?.addEventListener('click', () => changeFontSize(-1));
   document.getElementById('btnFontUp')?.addEventListener('click', () => changeFontSize(1));
   document.getElementById('btnAutoHrSpace')?.addEventListener('click', toggleTidyRule);

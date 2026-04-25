@@ -6,10 +6,53 @@
   <title>Saved Prompts - Scholar Assistant</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; }
-    .aside { width: 256px; flex-shrink: 0; background: #1e293b; border-right: 1px solid #334155; padding: 24px; display: flex; flex-direction: column; }
-    .aside h2 { font-size: 18px; font-weight: 700; margin: 0 0 24px 0; }
-    .aside-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    body { margin: 0; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; overflow-x: hidden; color-scheme: dark; }
+    .aside { width: 256px; flex-shrink: 0; background: #1e293b; border-right: 1px solid #334155; padding: 24px; display: flex; flex-direction: column; transition: width 0.22s ease, min-width 0.22s ease, opacity 0.2s ease, padding 0.2s ease, border-width 0.2s ease; overflow: hidden; }
+    body.prompts-folders-collapsed .aside {
+      width: 52px;
+      min-width: 52px;
+      padding: 12px 8px;
+      border-right-width: 1px;
+      opacity: 1;
+      pointer-events: auto;
+    }
+    body.prompts-folders-collapsed .folder-list {
+      display: none;
+    }
+    body.prompts-folders-collapsed #btnCreateFolder {
+      display: none;
+    }
+    body.prompts-folders-collapsed .aside-top {
+      flex: 1;
+      flex-direction: column;
+      justify-content: center;
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+      gap: 8px;
+    }
+    body.prompts-folders-collapsed .aside-file-actions {
+      flex: 1;
+      flex-direction: column;
+      justify-content: center;
+      margin-top: 0;
+      padding-top: 0;
+      border-top: none;
+      gap: 8px;
+    }
+    body.prompts-folders-collapsed .aside-file-actions .rail-icon-btn {
+      flex: 0 0 auto;
+      width: 100%;
+    }
+    .aside-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #334155;
+      flex-shrink: 0;
+    }
     .btn-icon { width: 32px; height: 32px; padding: 0; border: none; background: #334155; color: #94a3b8; border-radius: 6px; cursor: pointer; font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center; }
     .btn-icon:hover { background: #475569; color: #e2e8f0; }
     .card-actions-wrap { position: relative; }
@@ -32,16 +75,45 @@
     .folder-count { font-size: 10px; color: #64748b; font-weight: 700; }
     .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #0f172a; }
     .main-header { padding: 32px 32px 16px; border-bottom: 1px solid #334155; }
-    .main-header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+    body.prompts-compact-toolbar .main-header { padding: 20px 16px 12px; }
+    body.prompts-compact-toolbar .prompts-grid { padding: 16px; }
+    .main-header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; gap: 12px; }
+    .main-header-lead { display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0; }
+    .btn-folder-toggle {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 1px solid #475569;
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-folder-toggle:hover { background: #334155; border-color: #64748b; }
+    .main-header-lead .titles-wrap { min-width: 0; flex: 1; }
     .header-actions { display: flex; align-items: center; gap: 8px; }
-    .main-header h1 { font-size: 24px; font-weight: 700; margin: 0 0 4px 0; }
-    .main-header .sub { font-size: 12px; color: #64748b; }
+    .main-header h1 { font-size: clamp(15px, 0.9vw + 13px, 22px); font-weight: 700; margin: 0 0 4px 0; line-height: 1.2; }
+    .main-header .sub { font-size: clamp(9px, 0.3vw + 8.5px, 12px); color: #64748b; line-height: 1.35; }
+    body.prompts-compact-toolbar .main-header h1 { font-size: clamp(15px, 2.8vw, 18px); }
+    body.prompts-compact-toolbar .main-header .sub { font-size: 10px; }
+    body.prompts-compact-toolbar .main-header-top { margin-bottom: 14px; }
     .search-wrap { position: relative; margin-bottom: 16px; }
     .search-wrap input { width: 100%; padding: 12px 16px 12px 40px; background: #1e293b; border: 1px solid #475569; border-radius: 12px; color: #e2e8f0; font-size: 14px; outline: none; }
     .search-wrap input:focus { border-color: #60a5fa; }
     .search-wrap::before { content: '🔍'; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; }
-    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
-    .btn { padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .btn { padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn .btn-ico { font-size: 15px; line-height: 1; flex-shrink: 0; }
+    .btn .btn-label { white-space: nowrap; }
+    body.prompts-compact-toolbar .btn-row .btn { padding: 8px 11px; min-width: 40px; }
+    body.prompts-compact-toolbar .btn-row .btn .btn-label { display: none; }
+    body.prompts-compact-toolbar .btn-row .btn.btn-primary { min-width: 44px; }
     .btn-primary { background: #2563eb; color: #fff; }
     .btn-primary:hover { background: #1d4ed8; }
     .btn-secondary { background: #334155; color: #94a3b8; }
@@ -60,8 +132,43 @@
     .btn-view:hover { color: #60a5fa; }
     .btn-more:hover { color: #e2e8f0; }
     .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .card-header-main { flex: 1; min-width: 0; }
     .card-actions { display: flex; gap: 8px; align-items: center; opacity: 0.7; }
     .prompt-card:hover .card-actions { opacity: 1; }
+    body.prompts-cards-compact .prompt-card.prompt-list-item {
+      padding: 10px 14px;
+      margin-bottom: 8px;
+    }
+    body.prompts-cards-compact .prompt-card.prompt-list-item .card-header {
+      align-items: center;
+      gap: 10px;
+    }
+    body.prompts-cards-compact .prompt-card.prompt-list-item .prompt-title {
+      margin: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    body.prompts-cards-compact .prompt-card.prompt-list-item .prompt-preview,
+    body.prompts-cards-compact .prompt-card.prompt-list-item .tags {
+      display: none;
+    }
+    body.prompts-cards-compact #btnToggleCardDensity {
+      background: #1d4ed8;
+      color: #fff;
+    }
+    body.prompts-cards-compact #btnToggleCardDensity:hover {
+      background: #1e40af;
+      color: #fff;
+    }
+    body.prompts-theme-light.prompts-cards-compact #btnToggleCardDensity {
+      background: #2563eb;
+      color: #fff;
+    }
+    body.prompts-theme-light.prompts-cards-compact #btnToggleCardDensity:hover {
+      background: #1d4ed8;
+      color: #fff;
+    }
     .dropdown-menu { position: absolute; top: 100%; right: 0; margin-top: 4px; display: none; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 4px; min-width: 100px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 50; }
     .dropdown-menu.show { display: block; }
     .dropdown-menu button { padding: 8px 12px; border: none; background: none; color: #e2e8f0; cursor: pointer; font-size: 13px; width: 100%; text-align: left; border-radius: 4px; }
@@ -122,11 +229,21 @@
     #view-prompt-modal .modal-footer-view {
       flex-shrink: 0;
       display: flex;
-      gap: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
       padding: 16px 24px;
       border-top: 1px solid #334155;
       justify-content: flex-end;
       background: #1e293b;
+    }
+    body.prompts-compact-toolbar #view-prompt-modal .modal-footer-view { padding: 12px 16px; gap: 6px; }
+    body.prompts-compact-toolbar #view-prompt-modal .modal-footer-view .btn { padding: 8px 12px; font-size: 12px; }
+    body.prompts-compact-toolbar #view-prompt-modal .modal-header { padding: 16px 18px; }
+    body.prompts-compact-toolbar #view-prompt-modal .modal-header h3 { font-size: clamp(14px, 3.5vw, 17px); margin: 0; }
+    @media (max-width: 480px) {
+      .main-header h1 { font-size: 15px; }
+      .main-header .sub { font-size: 10px; }
+      #view-prompt-modal .modal-header h3 { font-size: 14px; }
     }
     .color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 24px; }
     .color-btn { width: 40px; height: 40px; border-radius: 12px; border: none; cursor: pointer; }
@@ -136,14 +253,195 @@
     .modal-body { padding: 32px; }
     .msg-toast { position: fixed; top: 40px; left: 50%; transform: translateX(-50%); padding: 12px 24px; background: #1e293b; color: #e2e8f0; border-radius: 999px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
     .msg-toast.show { opacity: 1; }
+    /* Left sidebar top: Open / Save (.npp) */
+    .aside-file-actions {
+      flex: 1;
+      min-width: 0;
+      flex-shrink: 0;
+      display: flex;
+      gap: 8px;
+      margin-top: 0;
+      padding-top: 0;
+      border-top: none;
+    }
+    .rail-icon-btn {
+      flex: 1;
+      min-width: 0;
+      height: 38px;
+      padding: 0;
+      margin: 0;
+      border: 1px solid #475569;
+      background: #334155;
+      color: #e2e8f0;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .rail-icon-btn:hover { background: #475569; border-color: #64748b; color: #f8fafc; }
+    .rail-icon-btn:active { transform: scale(0.96); }
+    .rail-icon-btn svg { display: block; flex-shrink: 0; }
+
+    /* Light theme */
+    body.prompts-theme-light {
+      background: #f8fafc;
+      color: #0f172a;
+      color-scheme: light;
+    }
+    body.prompts-theme-light .aside {
+      background: #ffffff;
+      border-right-color: #e2e8f0;
+    }
+    body.prompts-theme-light .aside-top { border-bottom-color: #e2e8f0; }
+    body.prompts-theme-light .btn-icon {
+      background: #e2e8f0;
+      color: #475569;
+    }
+    body.prompts-theme-light .btn-icon:hover {
+      background: #cbd5e1;
+      color: #0f172a;
+    }
+    body.prompts-theme-light .folder-btn { color: #475569; }
+    body.prompts-theme-light .folder-btn:hover { background: rgba(15, 23, 42, 0.06); }
+    body.prompts-theme-light .folder-btn.active {
+      background: rgba(37, 99, 235, 0.12);
+      color: #2563eb;
+    }
+    body.prompts-theme-light .btn-folder-more { color: #64748b; }
+    body.prompts-theme-light .btn-folder-more:hover { color: #0f172a; }
+    body.prompts-theme-light .folder-dropdown {
+      background: #ffffff;
+      border-color: #e2e8f0;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+    }
+    body.prompts-theme-light .folder-dropdown button { color: #1e293b; }
+    body.prompts-theme-light .folder-dropdown button:hover { background: #f1f5f9; }
+    body.prompts-theme-light .folder-count { color: #64748b; }
+    body.prompts-theme-light .main { background: #f8fafc; }
+    body.prompts-theme-light .main-header { border-bottom-color: #e2e8f0; }
+    body.prompts-theme-light .btn-folder-toggle {
+      border-color: #cbd5e1;
+      background: #ffffff;
+      color: #0f172a;
+    }
+    body.prompts-theme-light .btn-folder-toggle:hover {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+    }
+    body.prompts-theme-light .main-header h1 { color: #0f172a; }
+    body.prompts-theme-light .main-header .sub { color: #64748b; }
+    body.prompts-theme-light .search-wrap input {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+    body.prompts-theme-light .search-wrap input:focus { border-color: #2563eb; }
+    body.prompts-theme-light .btn-secondary {
+      background: #e2e8f0;
+      color: #475569;
+    }
+    body.prompts-theme-light .btn-secondary:hover {
+      background: #cbd5e1;
+      color: #0f172a;
+    }
+    body.prompts-theme-light .prompt-card {
+      background: #ffffff;
+      border-color: #e2e8f0;
+    }
+    body.prompts-theme-light .prompt-card:hover { background: #f1f5f9; }
+    body.prompts-theme-light .prompt-card h4 { color: #0f172a; }
+    body.prompts-theme-light .prompt-card:hover h4 { color: #020617; }
+    body.prompts-theme-light .prompt-card .preview { color: #64748b; }
+    body.prompts-theme-light .tag {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+      color: #475569;
+    }
+    body.prompts-theme-light .btn-fav,
+    body.prompts-theme-light .btn-view,
+    body.prompts-theme-light .btn-more { color: #64748b; }
+    body.prompts-theme-light .btn-more:hover { color: #0f172a; }
+    body.prompts-theme-light .dropdown-menu {
+      background: #ffffff;
+      border-color: #e2e8f0;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+    }
+    body.prompts-theme-light .dropdown-menu button { color: #1e293b; }
+    body.prompts-theme-light .dropdown-menu button:hover { background: #f1f5f9; }
+    body.prompts-theme-light .modal-overlay { background: rgba(15, 23, 42, 0.45); }
+    body.prompts-theme-light .modal-box {
+      background: #ffffff;
+      border-color: #e2e8f0;
+    }
+    body.prompts-theme-light .modal-box h3 { color: #0f172a; }
+    body.prompts-theme-light .modal-box label { color: #64748b; }
+    body.prompts-theme-light .modal-box input,
+    body.prompts-theme-light .modal-box select,
+    body.prompts-theme-light .modal-box textarea {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+    body.prompts-theme-light .modal-box input:focus,
+    body.prompts-theme-light .modal-box textarea:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    }
+    body.prompts-theme-light .view-content {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+      color: #1e293b;
+    }
+    body.prompts-theme-light .modal-header { border-bottom-color: #e2e8f0; }
+    body.prompts-theme-light .modal-header h3 { color: #0f172a; }
+    body.prompts-theme-light #view-prompt-modal .modal-footer-view {
+      border-top-color: #e2e8f0;
+      background: #ffffff;
+    }
+    body.prompts-theme-light .btn-cancel {
+      background: #f1f5f9;
+      color: #334155;
+    }
+    body.prompts-theme-light .btn-cancel:hover { background: #e2e8f0; }
+    body.prompts-theme-light .msg-toast {
+      background: #ffffff;
+      color: #0f172a;
+      box-shadow: 0 4px 20px rgba(15, 23, 42, 0.15);
+    }
+    body.prompts-theme-light .rail-icon-btn {
+      border-color: #cbd5e1;
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    body.prompts-theme-light .rail-icon-btn:hover {
+      background: #cbd5e1;
+      border-color: #94a3b8;
+      color: #020617;
+    }
+    body.prompts-theme-light #btnApplyToNotebookLM {
+      background: #0f172a !important;
+      color: #ffffff !important;
+    }
   </style>
 </head>
 <body>
 
-  <aside class="aside">
-    <div class="aside-header">
-      <h2>Folders</h2>
-      <button id="btnCreateFolder" class="btn-icon" title="폴더 만들기">+</button>
+  <aside class="aside" id="folderAside" aria-label="Folders and prompts file">
+    <div class="aside-top">
+      <div class="aside-file-actions" aria-label="Prompt file">
+        <button id="btnImportNpp" class="rail-icon-btn" type="button" title="Prompt Open (.npp / JSON import)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </button>
+        <button id="btnExportNpp" class="rail-icon-btn" type="button" title="Prompt Save (export .npp)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+      </div>
+      <button id="btnCreateFolder" class="btn-icon" type="button" title="폴더 만들기">+</button>
     </div>
     <nav id="folder-list" class="folder-list"></nav>
   </aside>
@@ -151,13 +449,15 @@
   <main class="main">
     <header class="main-header">
       <div class="main-header-top">
-        <div>
-          <h1>Customize Your Prompts</h1>
-          <p class="sub">당신이 만든 프롬프트를 관리하세요.</p>
+        <div class="main-header-lead">
+          <button type="button" id="btnToggleFolders" class="btn-folder-toggle" aria-expanded="true" aria-controls="folderAside" title="폴더 패널 접기">◀</button>
+          <div class="titles-wrap">
+            <h1>Customize Your Prompts</h1>
+            <p class="sub">당신이 만든 프롬프트를 관리하세요.</p>
+          </div>
         </div>
         <div class="header-actions">
-          <button id="btnImportNpp" class="btn btn-secondary" type="button" title=".npp Export">Prompt Open</button>
-          <button id="btnExportNpp" class="btn btn-secondary" type="button" title=".npp Import">Prompt Save</button>
+          <button type="button" id="btnToggleTheme" class="btn-icon" title="라이트 모드로 전환" aria-label="라이트 모드로 전환"><span aria-hidden="true">☀</span></button>
           <button id="btnClose" class="btn-icon" title="Close">X</button>
         </div>
       </div>
@@ -165,9 +465,10 @@
         <input id="searchInput" type="text" placeholder="Search prompts...">
       </div>
       <div class="btn-row">
-        <button id="btnTags" class="btn btn-secondary">🏷 Tags</button>
-        <button id="btnFavorites" class="btn btn-secondary">★ Favorites</button>
-        <button id="btnNewPrompt" class="btn btn-primary">+ Add New Prompt</button>
+        <button id="btnTags" class="btn btn-secondary" type="button" title="태그로 검색 (검색창 사용)"><span class="btn-ico" aria-hidden="true">🏷</span><span class="btn-label">Tags</span></button>
+        <button id="btnFavorites" class="btn btn-secondary" type="button" title="즐겨찾기만 보기"><span class="btn-ico" aria-hidden="true">★</span><span class="btn-label">Favorites</span></button>
+        <button id="btnToggleCardDensity" class="btn btn-secondary" type="button" title="카드를 한 줄로 간단히 표시" aria-pressed="false"><span class="btn-ico" aria-hidden="true">☰</span><span class="btn-label">간단</span></button>
+        <button id="btnNewPrompt" class="btn btn-primary" type="button" title="새 프롬프트 추가"><span class="btn-ico" aria-hidden="true">+</span><span class="btn-label">Add New Prompt</span></button>
       </div>
     </header>
     <div id="prompts-grid" class="prompts-grid"></div>
@@ -240,9 +541,10 @@
         <div id="viewPromptContent" class="view-content"></div>
       </div>
       <div class="modal-footer modal-footer-view">
-        <button id="btnInputOnly" class="btn btn-secondary" title="노트북LM 프롬프트에 입력만">입력</button>
-        <button id="btnApplyToNotebookLM" class="btn" style="background:#fff;color:#0f172a;" title="노트북LM 프롬프트에 넣고 실행">입력실행</button>
-        <button id="btnCopyPrompt" class="btn btn-primary" title="클립보드 복사">복사</button>
+        <button id="btnInputOnly" class="btn btn-secondary" type="button" title="노트북LM 프롬프트에 입력만">입력</button>
+        <button id="btnApplyToNotebookLM" class="btn" type="button" style="background:#fff;color:#0f172a;" title="노트북LM 프롬프트에 넣고 실행">입력실행</button>
+        <button id="btnClearNotebookInput" class="btn btn-secondary" type="button" title="NotebookLM 스튜디오/채팅 입력란 비우기">입력지우기</button>
+        <button id="btnCopyPrompt" class="btn btn-primary" type="button" title="클립보드 복사">복사</button>
       </div>
     </div>
   </div>

@@ -47,10 +47,16 @@
                     <button type="button" class="rail-btn rail-btn-explore" data-action="setExplorePrompt" data-arg="step3" title="STEP 3: 현실 세계 적용">S3</button>
                     <button type="button" class="rail-btn rail-btn-explore" data-action="setExplorePrompt" data-arg="step4" title="STEP 4: 데이터 해석">S4</button>
                     <button type="button" class="rail-btn rail-btn-explore" data-action="setExplorePrompt" data-arg="step5" title="STEP 5: 셀프 테스트">S5</button>
+                    <button type="button" class="rail-btn rail-btn-io" data-action="importPromptsNpp" title="저장된 프롬프트 가져오기 (.npp / JSON)">↑</button>
+                    <button type="button" class="rail-btn rail-btn-io" data-action="exportPromptsNpp" title="저장된 프롬프트 내보내기 (.npp)">↓</button>
                     <button type="button" class="rail-btn rail-btn-theme" data-action="toggleTheme" title="다크/라이트 전환">D/L</button>
                 </div>
                 <div class="left-panel-full">
-                <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+                    <div class="left-panel-io-row" role="group" aria-label="Saved prompts import and export">
+                        <button type="button" class="btn-io-sidebar" data-action="importPromptsNpp" title="Import saved prompts (.npp / JSON)">Import</button>
+                        <button type="button" class="btn-io-sidebar" data-action="exportPromptsNpp" title="Export saved prompts (.npp)">Export</button>
+                    </div>
                     <button type="button" class="sidebar-theme-mini" data-action="toggleTheme" title="다크/라이트 전환">D/L</button>
                 </div>
                 <div class="section-title blue">Slide Tools</div>
@@ -71,7 +77,6 @@
                 </div>
                 <button class="btn-step" data-action="generateSlidePrompt" data-arg="2">STEP 02 재귀적 상세 추출</button>
                 <button class="btn-step" data-action="generateSlidePrompt" data-arg="3">STEP 03 디자인 일관성</button>
-                <button class="btn-step" data-action="appendCitationPrompt" style="margin-top:12px;background:#7c3aed;color:#fff;border-color:#6d28d9;">[인용요청 프롬프트]</button>
                 <div class="section-title purple" style="margin-top:10px">Scholar Explore</div>
                 <div class="explore-item" data-action="setExplorePrompt" data-arg="step1">STEP 1: 지식의 지도</div>
                 <div class="explore-item" data-action="setExplorePrompt" data-arg="step2">STEP 2: 핵심 개념 딥다이빙</div>
@@ -79,6 +84,9 @@
                 <div class="explore-item" data-action="setExplorePrompt" data-arg="step3">STEP 3: 현실 세계 적용</div>
                 <div class="explore-item" data-action="setExplorePrompt" data-arg="step4">STEP 4: 데이터 해석</div>
                 <div class="explore-item" data-action="setExplorePrompt" data-arg="step5">STEP 5: 셀프 테스트</div>
+                <div class="section-title blue" style="margin-top:14px">설정 프롬프트</div>
+                <button type="button" class="btn-step" data-action="appendAcademicSettingPrompt" title="입력창이 비어 있으면 추가하지 않습니다. 기존 프롬프트 하단에만 붙입니다." style="margin-top:6px;background:#0d9488;color:#fff;border-color:#0f766e;">[학술 서술 설정]</button>
+                <button type="button" class="btn-step" data-action="appendCitationPrompt" title="입력창이 비어 있으면 추가하지 않습니다. 기존 프롬프트 하단에만 붙입니다." style="margin-top:8px;background:#7c3aed;color:#fff;border-color:#6d28d9;">[인용요청 프롬프트]</button>
                 </div>
             </div>
             <div class="panel-splitter" id="panelSplitter" title="드래그하여 좌우 폭 조절"></div>
@@ -194,6 +202,7 @@
     </div>
 
     <div id="settings-modal-slot"></div>
+    <input type="file" id="sidebarNppFileInput" accept=".npp,application/json" hidden>
     <div id="message-box" class="msg-toast">메시지</div>
     <script src="confirm/confirm.js"></script>
     <script src="popup_setting/popup-settings.js"></script>

@@ -1,0 +1,159 @@
+/* NotebookLM 페이지: Scholar 검색 모달 (Tailwind 없이 동작) */
+#scholar-search-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  pointer-events: none;
+  box-sizing: border-box;
+  display: none;
+  align-items: flex-start;
+  justify-content: flex-end;
+  background: transparent;
+}
+
+#scholar-search-modal.flex {
+  display: flex !important;
+}
+
+#scholar-search-modal.hidden {
+  display: none !important;
+}
+
+#scholar-search-panel {
+  pointer-events: auto;
+  box-sizing: border-box;
+  margin: 72px 12px 0 0;
+  max-width: min(96vw, 760px);
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #475569;
+  background: rgba(15, 23, 42, 0.97);
+  color: #e2e8f0;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+}
+
+#scholar-search-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  cursor: move;
+  user-select: none;
+}
+
+#scholar-search-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#scholar-search-body > * + * {
+  margin-top: 12px;
+}
+
+#scholar-search-query-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+#scholar-search-input-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#scholar-search-query {
+  flex: 1 1 160px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #6366f1;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-size: 14px;
+}
+
+#scholar-search-run-btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 0;
+  background: #4f46e5;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#scholar-search-run-btn:hover {
+  background: #4338ca;
+}
+
+#scholar-search-options {
+  padding-top: 4px;
+}
+
+#scholar-search-options .flex,
+#scholar-search-options [class*="flex-wrap"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+#scholar-search-lang,
+#scholar-search-period {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #475569;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+#scholar-search-help {
+  font-size: 11px;
+  color: #fbbf24;
+  margin: 0;
+}
+
+#scholar-search-header button,
+#scholar-search-shrink-btn,
+#scholar-search-dock-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #cbd5e1;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#scholar-search-header button:hover {
+  background: #334155;
+}
+
+#scholarref-panel.hidden {
+  display: none !important;
+}
+
+.pt-1.flex.justify-end,
+#scholar-search-body > div.pt-1 {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.inline-flex {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

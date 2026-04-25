@@ -68,7 +68,7 @@ Crucial Rules:
     tags: 'scholar explore, step1',
     isFavorite: false,
     ts: '2026-03-22T00:00:03.000Z',
-    content: `STEP 1: 지식의 지도 그리기 (Preview)\n"이 책(또는 챕터)의 전체 내용을 논리적인 흐름에 따라 섹션벼로 핵심을 요약해줘. 특히 내가 이 단원을 공부하면서 반드시 기억해야 할  '가장 중요한 전문 용어' 를 뽑아내고, 각 용어가 어느 페이지(Source)에서 중요하게 다루어지는 제시하고, 그 용어의 학술적인용정보 , 연구자(연도)를 포함해줘. 전체 Flow Chart를 만들면서 단원별 연결관계 및 이해해야할 구조를 도식화해줘.Mind Map개념으로 제시해줘.  학술적 문체(~이다)로 전문적 어조 사용할 것."  \nStrict Citation Rule: Source to Footnote: 1. 매핑 규칙: 원문의 'Source N'을 발견하면 등장 순서대로 [^1], [^2]... 로 치환하여 본문에 표기할 것. 2. 주석 생성: 답변 최하단에 주석형식을 [^1]:내용 (빈줄)[^2]:내용 (빈줄) [^3]:내용...의 형식으로 하여 [^n]: "원문 텍스트" (빈줄) [^n+1]:내용의 형식의 원문리스트를 반드시 포함할 것(각 번호 사이에는 반드시 빈 줄을 삽입할 것). 3. 학술적 태깅: 'Source: Source N' 텍스트는 스타일은 지양하고, 해당 개념 바로 뒤에 [^n]를 붙여 출처를 명확히 할 것(n=1,2,3...).`
+    content: `STEP 1: 지식의 지도 그리기 (Preview)\n"이 책(또는 챕터)의 전체 내용을 논리적인 흐름에 따라 섹션별로 핵심을 요약해줘. 특히 내가 이 단원을 공부하면서 반드시 기억해야 할  '가장 중요한 전문 용어' 를 뽑아내고, 각 용어가 어느 페이지(Source)에서 중요하게 다루어지는 제시하고, 그 용어의 학술적인용정보 , 연구자(연도)를 포함해줘. 전체 Flow Chart를 만들면서 단원별 연결관계 및 이해해야할 구조를 도식화해줘.Mind Map개념으로 제시해줘.  학술적 문체(~이다)로 전문적 어조 사용할 것."  \nStrict Citation Rule: Source to Footnote: 1. 매핑 규칙: 원문의 'Source N'을 발견하면 등장 순서대로 [^1], [^2]... 로 치환하여 본문에 표기할 것. 2. 주석 생성: 답변 최하단에 주석형식을 [^1]:내용 (빈줄)[^2]:내용 (빈줄) [^3]:내용...의 형식으로 하여 [^n]: "원문 텍스트" (빈줄) [^n+1]:내용의 형식의 원문리스트를 반드시 포함할 것(각 번호 사이에는 반드시 빈 줄을 삽입할 것). 3. 학술적 태깅: 'Source: Source N' 텍스트는 스타일은 지양하고, 해당 개념 바로 뒤에 [^n]를 붙여 출처를 명확히 할 것(n=1,2,3...).`
   },
   {
     id: 'default-explore-step2',
@@ -178,7 +178,14 @@ function getStorage() {
 
 async function loadData() {
   const storage = getStorage();
-  if (!storage) return;
+  if (!storage) {
+    const seeded = ensureDefaultPromptSeed([...DEFAULT_FOLDERS], []);
+    folders = seeded.folders;
+    savedPrompts = seeded.prompts;
+    deletedPrompts = [];
+    deletedFolders = [];
+    return;
+  }
   try {
     const data = await storage.get([STORAGE_KEYS.savedPrompts, STORAGE_KEYS.promptFolders, STORAGE_KEYS.deletedPrompts, STORAGE_KEYS.deletedFolders]);
     folders = Array.isArray(data[STORAGE_KEYS.promptFolders]) && data[STORAGE_KEYS.promptFolders].length > 0
@@ -451,9 +458,9 @@ function renderPromptsGrid() {
     const titleEsc = escapeHtml(p.title || '');
     const favClass = p.isFavorite ? 'btn-fav fav' : 'btn-fav';
     const tagsHtml = (p.tags || '').trim() ? `<div class="tags">${(p.tags || '').split(',').map(t => `<span class="tag"># ${escapeHtml(t.trim())}</span>`).join('')}</div>` : '';
-    return `<div class="prompt-card">
+    return `<div class="prompt-card prompt-list-item">
       <div class="card-header">
-        <div style="flex:1">
+        <div class="card-header-main">
           <h4 class="prompt-title" data-id="${escapeHtml(p.id)}">${titleEsc}</h4>
           <p class="preview prompt-preview" data-id="${escapeHtml(p.id)}">${contentEsc}${(p.content || '').length > 100 ? '...' : ''}</p>
         </div>
@@ -580,28 +587,32 @@ async function applyPromptToInput(content) {
   showMessage('프롬프트가 입력창에 설정되었습니다. 확장 팝업을 열어 확인하세요.');
 }
 
+async function resolveNotebookLMTab() {
+  const tabs = await chrome.tabs.query({ url: 'https://notebooklm.google.com/*' });
+  if (!tabs?.length) return null;
+  const active = tabs.find((t) => t.active);
+  if (active) return active;
+  return tabs[tabs.length - 1];
+}
+
 async function applyPromptToNotebookLM(runImmediately = false) {
   const content = currentViewingPromptContent;
   if (!content?.trim()) {
-    showMessage('??? ??? ????.');
+    showMessage('프롬프트 내용이 없습니다.');
     return;
   }
   try {
     await navigator.clipboard.writeText(content);
-    let tab = (await chrome.tabs.query({ url: 'https://notebooklm.google.com/*' }))[0];
-    if (!tab) tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+    const tab = await resolveNotebookLMTab();
     if (!tab?.id) {
-      showMessage('NotebookLM ?? ?? ? ????.');
+      showMessage('NotebookLM 탭을 찾을 수 없습니다. NotebookLM을 연 뒤 다시 시도하세요.');
       return;
     }
     if (!tab.url?.includes('notebooklm.google.com')) {
-      showMessage('NotebookLM ???? ?????.');
+      showMessage('NotebookLM 페이지에서만 사용할 수 있습니다.');
       return;
     }
-    let res = await chrome.tabs.sendMessage(tab.id, { action: 'applyPromptToStudio', text: content, runImmediately });
-    if (!res?.ok) {
-      res = await chrome.tabs.sendMessage(tab.id, { action: 'pasteAndExecute', text: content, runImmediately });
-    }
+    const res = await chrome.tabs.sendMessage(tab.id, { action: 'pasteAndExecute', text: content, runImmediately });
     if (res?.ok) {
       if (res.target === 'studio') {
         showMessage(runImmediately && res.executed ? 'Studio에 반영했습니다(실행).' : 'Studio 입력란에 반영했습니다.');
@@ -610,12 +621,40 @@ async function applyPromptToNotebookLM(runImmediately = false) {
       }
       focusPromptsWindow();
     } else {
-      showMessage('NotebookLM ???? ????? ? ?? ?????.');
+      showMessage('NotebookLM에 반영하지 못했습니다. 페이지를 새로고침 후 다시 시도하세요.');
     }
   } catch (e) {
-    showMessage('NotebookLM ???? ????? ? ?? ?????.');
+    showMessage('NotebookLM에 연결하지 못했습니다. 확장 프로그램을 다시 로드하거나 NotebookLM을 확인하세요.');
   }
 }
+
+async function clearNotebookLMStudioInput() {
+  try {
+    if (typeof chrome === 'undefined' || !chrome.tabs?.query) {
+      showMessage('Chrome 확장 프로그램에서만 사용할 수 있습니다.');
+      return;
+    }
+    const tab = await resolveNotebookLMTab();
+    if (!tab?.id) {
+      showMessage('탭을 찾을 수 없습니다.');
+      return;
+    }
+    if (!tab.url?.includes('notebooklm.google.com')) {
+      showMessage('NotebookLM 페이지에서 사용해 주세요.');
+      return;
+    }
+    const res = await chrome.tabs.sendMessage(tab.id, { action: 'clearNotebookLMInput' });
+    if (res?.ok) {
+      showMessage('NotebookLM 입력란을 비웠습니다.');
+      focusPromptsWindow();
+    } else {
+      showMessage('입력란을 찾지 못했습니다. 스튜디오 설정을 열고 다시 시도해 주세요.');
+    }
+  } catch (e) {
+    showMessage('입력란을 지우지 못했습니다.');
+  }
+}
+
 
 async function copyPromptToClipboard() {
   const content = currentViewingPromptContent;
@@ -832,6 +871,115 @@ function saveNewPrompt() {
   showMessage('프롬프트가 저장되었습니다.');
 }
 
+const PROMPTS_LAYOUT_STORAGE_KEY = 'scholarPromptsFoldersCollapsed';
+const PROMPTS_THEME_STORAGE_KEY = 'scholarPromptsTheme';
+const PROMPTS_CARDS_COMPACT_KEY = 'scholarPromptsCardsCompact';
+const PROMPTS_COMPACT_BREAKPOINT = 920;
+const THEME_ICON_SUN = '\u2600';
+const THEME_ICON_MOON = '\u263E';
+
+function syncThemeToggleButton() {
+  const btn = document.getElementById('btnToggleTheme');
+  if (!btn) return;
+  const light = document.body.classList.contains('prompts-theme-light');
+  const icon = btn.querySelector('[aria-hidden="true"]');
+  if (icon) icon.textContent = light ? THEME_ICON_MOON : THEME_ICON_SUN;
+  else btn.textContent = light ? THEME_ICON_MOON : THEME_ICON_SUN;
+  btn.title = light ? '다크 모드로 전환' : '라이트 모드로 전환';
+  btn.setAttribute('aria-label', light ? '다크 모드로 전환' : '라이트 모드로 전환');
+}
+
+function initPromptsTheme() {
+  try {
+    if (localStorage.getItem(PROMPTS_THEME_STORAGE_KEY) === 'light') {
+      document.body.classList.add('prompts-theme-light');
+    }
+  } catch (_) {}
+  syncThemeToggleButton();
+  document.getElementById('btnToggleTheme')?.addEventListener('click', () => {
+    document.body.classList.toggle('prompts-theme-light');
+    try {
+      localStorage.setItem(
+        PROMPTS_THEME_STORAGE_KEY,
+        document.body.classList.contains('prompts-theme-light') ? 'light' : 'dark'
+      );
+    } catch (_) {}
+    syncThemeToggleButton();
+  });
+}
+
+function syncCardDensityButton() {
+  const btn = document.getElementById('btnToggleCardDensity');
+  if (!btn) return;
+  const compact = document.body.classList.contains('prompts-cards-compact');
+  btn.setAttribute('aria-pressed', compact ? 'true' : 'false');
+  btn.title = compact ? '미리보기·태그를 포함해 표시' : '카드를 한 줄로 간단히 표시';
+  const lab = btn.querySelector('.btn-label');
+  if (lab) lab.textContent = compact ? '상세' : '간단';
+}
+
+function initPromptsCardDensity() {
+  try {
+    if (localStorage.getItem(PROMPTS_CARDS_COMPACT_KEY) === '1') {
+      document.body.classList.add('prompts-cards-compact');
+    }
+  } catch (_) {}
+  syncCardDensityButton();
+  document.getElementById('btnToggleCardDensity')?.addEventListener('click', () => {
+    document.body.classList.toggle('prompts-cards-compact');
+    try {
+      localStorage.setItem(
+        PROMPTS_CARDS_COMPACT_KEY,
+        document.body.classList.contains('prompts-cards-compact') ? '1' : '0'
+      );
+    } catch (_) {}
+    syncCardDensityButton();
+  });
+}
+
+function applyPromptsResponsive() {
+  try {
+    const w = window.innerWidth;
+    document.body.classList.toggle('prompts-compact-toolbar', w < PROMPTS_COMPACT_BREAKPOINT);
+  } catch (_) {}
+}
+
+function syncFolderToggleButton() {
+  const btn = document.getElementById('btnToggleFolders');
+  if (!btn) return;
+  const collapsed = document.body.classList.contains('prompts-folders-collapsed');
+  btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  btn.textContent = collapsed ? '▶' : '◀';
+  btn.title = collapsed ? '폴더 패널 펼치기' : '폴더 패널 접기';
+}
+
+function initPromptsLayout() {
+  try {
+    const saved = localStorage.getItem(PROMPTS_LAYOUT_STORAGE_KEY);
+    if (saved === '1') {
+      document.body.classList.add('prompts-folders-collapsed');
+    } else if (saved === null && window.innerWidth < 800) {
+      document.body.classList.add('prompts-folders-collapsed');
+    }
+  } catch (_) {}
+  applyPromptsResponsive();
+  syncFolderToggleButton();
+  window.addEventListener('resize', () => {
+    applyPromptsResponsive();
+  });
+
+  document.getElementById('btnToggleFolders')?.addEventListener('click', () => {
+    document.body.classList.toggle('prompts-folders-collapsed');
+    try {
+      localStorage.setItem(
+        PROMPTS_LAYOUT_STORAGE_KEY,
+        document.body.classList.contains('prompts-folders-collapsed') ? '1' : '0'
+      );
+    } catch (_) {}
+    syncFolderToggleButton();
+  });
+}
+
 function bindEvents() {
   document.getElementById('btnCreateFolder')?.addEventListener('click', () => openModal('create-folder-modal'));
   document.getElementById('btnCancelFolder')?.addEventListener('click', () => closeModal('create-folder-modal'));
@@ -871,6 +1019,15 @@ function bindEvents() {
     refreshUI();
   });
 
+  document.getElementById('btnTags')?.addEventListener('click', () => {
+    const search = document.getElementById('searchInput');
+    if (search) {
+      search.focus();
+      search.select();
+    }
+    showMessage('검색창에 태그 키워드를 입력해 필터할 수 있습니다.');
+  });
+
   document.getElementById('btnExportNpp')?.addEventListener('click', exportPromptsToNpp);
   document.getElementById('btnImportNpp')?.addEventListener('click', () => {
     document.getElementById('nppFileInput')?.click();
@@ -892,14 +1049,35 @@ function bindEvents() {
 
   document.getElementById('btnInputOnly')?.addEventListener('click', () => applyPromptToNotebookLM(false));
   document.getElementById('btnApplyToNotebookLM')?.addEventListener('click', () => applyPromptToNotebookLM(true));
+  document.getElementById('btnClearNotebookInput')?.addEventListener('click', clearNotebookLMStudioInput);
   document.getElementById('btnCopyPrompt')?.addEventListener('click', copyPromptToClipboard);
 }
 
 async function init() {
-  await loadData();
+  initPromptsTheme();
+  initPromptsCardDensity();
+  initPromptsLayout();
+  try {
+    await loadData();
+  } catch (e) {
+    console.warn('init loadData:', e);
+    const seeded = ensureDefaultPromptSeed([...DEFAULT_FOLDERS], []);
+    folders = seeded.folders;
+    savedPrompts = seeded.prompts;
+    deletedPrompts = [];
+    deletedFolders = [];
+  }
   renderColorGrid();
   refreshUI();
   bindEvents();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+function startPromptsApp() {
+  void init();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startPromptsApp);
+} else {
+  startPromptsApp();
+}

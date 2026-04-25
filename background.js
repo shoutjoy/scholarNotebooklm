@@ -14,7 +14,8 @@ function isManagedExtensionUrl(url) {
     url.includes('popup.html') ||
     url.includes('prompts/prompts.html') ||
     url.includes('vieweditor/') ||
-    url.includes('md_editor/')
+    url.includes('md_editor/') ||
+    url.includes('folder/folder-manager.html')
   );
 }
 
@@ -62,7 +63,8 @@ async function focusOrCreateWindowByUrl(targetUrl, options = {}) {
     url: targetUrl,
     type: 'popup',
     width,
-    height
+    height,
+    focused: true
   });
 
   return {
@@ -91,12 +93,13 @@ function openPopupWindow(position) {
 
 function ensureFeatureDefaults() {
   chrome.storage.local.get(
-    ['scholarFeatureGeneralPrompt', 'scholarFeatureNotebookLM', 'scholarFeatureMDEditor', 'hideConversationSave', 'hideMDEditorHeader', 'hideScholarSlideStudio', 'hideMDProViewerStudio', 'tomdOpenType', 'scrapResponseFormat'],
+    ['scholarFeatureGeneralPrompt', 'scholarFeatureNotebookLM', 'scholarFeatureGeminiNotebook', 'scholarFeatureMDEditor', 'hideConversationSave', 'hideMDEditorHeader', 'hideScholarSlideStudio', 'hideMDProViewerStudio', 'tomdOpenType', 'scrapResponseFormat'],
     (d) => {
       if (chrome.runtime.lastError) return;
       const patch = {};
       if (d.scholarFeatureGeneralPrompt === undefined) patch.scholarFeatureGeneralPrompt = true;
       if (d.scholarFeatureNotebookLM === undefined) patch.scholarFeatureNotebookLM = true;
+      if (d.scholarFeatureGeminiNotebook === undefined) patch.scholarFeatureGeminiNotebook = true;
       if (d.scholarFeatureMDEditor === undefined) patch.scholarFeatureMDEditor = true;
       if (d.hideConversationSave === undefined) patch.hideConversationSave = true;
       if (d.hideMDEditorHeader === undefined) patch.hideMDEditorHeader = true;
@@ -133,6 +136,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         height: Math.floor(Number(height) || 600)
       }).then(() => sendResponse({ ok: true })).catch(e => sendResponse({ ok: false, err: String(e) }));
     } else sendResponse({ ok: false, err: 'url required' });
+    return true;
+  } else if (message.action === 'openResearchAssistantWindow') {
+    focusOrCreateWindowByUrl(chrome.runtime.getURL('popup.html'), {
+      width: 900,
+      height: 750
+    }).then(() => sendResponse({ ok: true })).catch((e) => sendResponse({ ok: false, err: String(e) }));
     return true;
   } else if (message.action === 'openPromptsWindow') {
     focusOrCreateWindowByUrl(chrome.runtime.getURL('prompts/prompts.html'), {

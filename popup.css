@@ -123,6 +123,35 @@
             color: #fff;
         }
 
+        .rail-btn-io {
+            background: #334155;
+            color: #e2e8f0;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .left-panel-io-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .btn-io-sidebar {
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 6px;
+            border: 1px solid #475569;
+            background: #334155;
+            color: #e2e8f0;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .btn-io-sidebar:hover {
+            filter: brightness(1.12);
+        }
+
         .rail-btn-tight {
             font-size: 8px;
             font-weight: 800;

@@ -55,7 +55,19 @@
         .btn-save { background: #2563eb; color: #fff; }
         .btn-save:hover { background: #1d4ed8; }
         .btn-auto { padding: 6px 10px; min-width: 54px; background: #334155; color: #e2e8f0; border: 1px solid #475569; font-size: 11px; font-weight: 700; }
-        .btn-auto.on { background: #0f766e; border-color: #14b8a6; color: #ecfeff; }`r`n        .btn-auto:not(.on) { opacity: 0.7; }
+        .btn-auto.on { background: #0f766e; border-color: #14b8a6; color: #ecfeff; }
+        .btn-auto:not(.on) { opacity: 0.7; }
+        .btn-copy {
+            padding: 8px 12px;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 11px;
+            cursor: pointer;
+            background: #334155;
+            color: #e2e8f0;
+        }
+        .btn-copy:hover { background: #475569; }
         .toolbar {
             padding: 10px 16px;
             display: flex;
@@ -176,6 +188,32 @@
         .btn-mode:hover { background: #115e59; }
         .btn-tomd { background: #ea580c; color: #fff; }
         .btn-tomd:hover { background: #c2410c; }
+        .btn-save-memo {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border-radius: 9999px;
+            background: #111827;
+            color: #f9fafb;
+            border: 1px solid #9ca3af;
+            font-weight: 600;
+            font-size: 12px;
+            letter-spacing: -0.01em;
+        }
+        .btn-save-memo:hover:not(:disabled) {
+            background: #1f2937;
+            border-color: #d1d5db;
+            color: #fff;
+        }
+        .btn-save-memo:disabled { opacity: 0.45; cursor: not-allowed; }
+        .btn-save-memo .btn-save-memo-icon { flex-shrink: 0; width: 16px; height: 16px; }
+        .btn-tool-preview {
+            background: #0f766e;
+            color: #ecfeff;
+            border: 1px solid #14b8a6;
+        }
+        .btn-tool-preview:hover { background: #115e59; }
         .msg-toast {
             position: fixed;
             top: 12px;
@@ -213,6 +251,8 @@
                 <button class="btn-tool" id="btnFontUp" type="button">A+</button>
             </div>
             <button class="btn-auto on" id="btnAutoHrSpace" type="button" title="구분선(----) 위에 엔터(빈 줄) 자동 삽입">Tidy</button>
+            <button class="btn-copy" id="btnCopyContent" type="button" title="에디터 전체 텍스트를 클립보드에 복사">복사</button>
+
             <button class="btn-save" id="btnSaveInternal">저장</button>
             <button class="btn-close" id="btnClose">닫기</button>
         </div>
@@ -229,6 +269,7 @@
         <button class="btn-tool" data-action="link">URL</button>
         <button class="btn-tool" data-action="image">Image</button>
         <button class="btn-tool" data-action="br">BR</button>
+        <button class="btn-tool btn-tool-preview" id="btnTogglePreview" type="button" title="Markdown 미리보기">MD 보기</button>
     </div>
     <div class="content preview-hidden" id="contentLayout">
         <section class="panel">
@@ -244,7 +285,13 @@
     <div class="footer">
         <button class="btn-download" id="btnSaveTxt">TXT 저장</button>
         <button class="btn-download" id="btnSaveMd">MD 저장</button>
-        <button class="btn-mode" id="btnTogglePreview">MD 보기</button>
+        <button class="btn-save-memo" id="btnSaveHtml" type="button" title="Markdown 미리보기와 동일하게 렌더링된 내용을 HTML 파일로 저장합니다">
+            <svg class="btn-save-memo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+            </svg>
+            html로 저장
+        </button>
         <button class="btn-tomd" id="btnToMD">ToMD로 보내기</button>
     </div>
     <div id="message-box" class="msg-toast">메시지</div>

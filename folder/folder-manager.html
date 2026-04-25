@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>노트북 폴더 — Scholar Assistant</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body {
+      font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+      background: #0b1120;
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column;
+    }
+    .topbar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid #1e293b;
+      background: #020617;
+    }
+    .topbar h1 { margin: 0; font-size: 15px; font-weight: 800; color: #f8fafc; }
+    .topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #e2e8f0;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button:hover { background: #334155; }
+    button.primary { background: #2563eb; border-color: #1d4ed8; color: #fff; }
+    button.primary:hover { background: #1d4ed8; }
+    button.ghost { background: transparent; border-color: transparent; color: #94a3b8; }
+    button.ghost:hover { color: #e2e8f0; }
+    button.danger { border-color: #991b1b; color: #fca5a5; background: transparent; }
+    button.danger:hover { background: rgba(153, 27, 27, 0.2); }
+    button.iconbtn {
+      width: 34px; height: 34px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 16px; line-height: 1;
+    }
+    .shell {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+    .left-pane {
+      width: 280px;
+      min-width: 240px;
+      max-width: 40vw;
+      border-right: 1px solid #1e293b;
+      background: #0f172a;
+      display: flex;
+      flex-direction: column;
+      transition: width 0.2s ease, margin 0.2s ease, opacity 0.2s ease;
+    }
+    .left-pane.collapsed {
+      width: 0;
+      min-width: 0;
+      border-right: none;
+      margin: 0;
+      opacity: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .left-head {
+      padding: 12px 12px 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #1e293b;
+    }
+    .left-head h2 { margin: 0; font-size: 14px; font-weight: 800; flex: 1; color: #f1f5f9; }
+    .left-body { flex: 1; overflow: auto; padding: 10px 10px 14px; display: flex; flex-direction: column; gap: 10px; }
+    input[type="text"], input[type="search"], select {
+      width: 100%;
+      padding: 9px 11px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #020617;
+      color: #e2e8f0;
+      font-size: 13px;
+    }
+    .create-row { display: flex; gap: 8px; }
+    .create-row input { flex: 1; min-width: 0; }
+    .folder-search { margin-top: 2px; }
+    .folder-nav { list-style: none; margin: 0; padding: 0; }
+    .folder-nav li { margin-bottom: 4px; }
+    .folder-nav button.nav-item {
+      width: 100%;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 10px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: #e2e8f0;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .folder-nav button.nav-item:hover { background: #1e293b; }
+    .folder-nav button.nav-item[data-active="1"] {
+      background: #1d4ed8;
+      border-color: #2563eb;
+      color: #fff;
+    }
+    .folder-nav .nav-meta { margin-left: auto; opacity: 0.75; font-size: 11px; font-weight: 700; }
+    .folder-nav .folder-row {
+      display: flex;
+      align-items: stretch;
+      gap: 4px;
+    }
+    .folder-nav .folder-row button.nav-item { flex: 1; min-width: 0; }
+    .folder-nav .mini-actions { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+    .folder-nav .mini-actions button {
+      padding: 4px 6px;
+      font-size: 11px;
+      min-height: 0;
+    }
+    .prefs {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid #1e293b;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .prefs label { display: block; margin-bottom: 6px; font-weight: 700; color: #cbd5e1; }
+    .prefs select { font-size: 12px; padding: 8px 10px; }
+    .right-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      background: #020617;
+    }
+    .right-head {
+      padding: 12px 16px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    .right-head h2 { margin: 0; font-size: 16px; font-weight: 800; color: #f8fafc; flex: 1; min-width: 140px; }
+    .right-head .nb-search { flex: 1; min-width: 180px; max-width: 420px; }
+    .right-head-scope {
+      flex-shrink: 0;
+      padding: 0 16px 12px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      background: #020617;
+    }
+    .nb-scope-label { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+    .nb-scope-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .nb-scope-tab {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #cbd5e1;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .nb-scope-tab:hover { background: #1e293b; color: #e2e8f0; }
+    .nb-scope-tab[data-active="1"] {
+      background: #1d4ed8;
+      border-color: #2563eb;
+      color: #fff;
+    }
+    .nb-scope-tab .nb-scope-count { opacity: 0.85; font-weight: 800; margin-left: 4px; }
+    .right-body { flex: 1; overflow: auto; padding: 12px 16px 20px; }
+    #status { font-size: 12px; color: #64748b; padding: 0 16px 8px; }
+    .nb-list { display: flex; flex-direction: column; gap: 10px; }
+    .nb-card {
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 14px 16px;
+      background: #0f172a;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+    .nb-card:hover { border-color: #334155; }
+    .nb-card-main { min-width: 0; flex: 1; width: 100%; }
+    .nb-card-header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+    }
+    .nb-card-title-block { min-width: 0; flex: 1; }
+    .nb-card-title { font-weight: 800; font-size: 14px; color: #f8fafc; word-break: break-word; margin-bottom: 0; }
+    .nb-card-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .nb-source-count {
+      font-size: 12px;
+      font-weight: 700;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+    .nb-btn-secondary {
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      background: #1e293b;
+      color: #e2e8f0;
+      font-weight: 700;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .nb-btn-secondary:hover { background: #334155; }
+    .nb-btn-secondary:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .nb-btn-secondary:disabled:hover { background: #1e293b; }
+    .nb-card-sources {
+      border-top: 1px solid #1e293b;
+      padding-top: 10px;
+      margin-top: 2px;
+    }
+    .nb-card-sources.nb-card-sources--collapsed { display: none !important; }
+    .nb-source-list { margin: 0; padding-left: 18px; color: #cbd5e1; font-size: 12px; line-height: 1.55; }
+    .nb-source-list li { margin-bottom: 4px; }
+    .nb-source-empty { list-style: none; padding-left: 0; color: #64748b; font-size: 12px; }
+    .nb-card-meta { font-size: 12px; color: #94a3b8; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .nb-folder-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .nb-folder-label { color: #cbd5e1; }
+    .nb-folder-label strong { color: #e2e8f0; }
+    button.linklike {
+      background: none;
+      border: none;
+      color: #60a5fa;
+      padding: 0;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    button.linklike:hover { color: #93c5fd; }
+    .nb-classify { margin-top: 10px; max-width: 320px; }
+    .nb-classify select { width: 100%; }
+    .nb-classify.hidden { display: none; }
+    .empty {
+      text-align: center;
+      color: #64748b;
+      font-size: 13px;
+      padding: 40px 20px;
+      border: 1px dashed #334155;
+      border-radius: 12px;
+    }
+    .hint { font-size: 11px; color: #64748b; line-height: 1.5; margin-top: 12px; max-width: 560px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>노트북 폴더</h1>
+    <div class="topbar-actions">
+      <button type="button" id="btnRescan">목록 다시 읽기</button>
+      <button type="button" id="btnClose" class="ghost">닫기</button>
+    </div>
+  </div>
+  <p id="status"></p>
+  <div class="shell">
+    <aside class="left-pane" id="leftPane">
+      <div class="left-head">
+        <h2>폴더</h2>
+        <button type="button" class="iconbtn ghost" id="btnCollapseLeft" title="폴더 패널 접기">‹</button>
+      </div>
+      <div class="left-body">
+        <div class="create-row">
+          <input type="text" id="newFolderName" placeholder="새 폴더 이름" maxlength="80" />
+          <button type="button" id="btnAddFolder" class="primary">+ 생성</button>
+        </div>
+        <input type="search" class="folder-search" id="folderSearch" placeholder="폴더 검색…" />
+        <ul class="folder-nav" id="folderList"></ul>
+        <div class="prefs">
+          <label for="classifyMode">분류 방식</label>
+          <select id="classifyMode" title="오른쪽 목록에서 폴더를 고르는 방식">
+            <option value="inline">항상 폴더 선택 표시</option>
+            <option value="change">「변경」 클릭 시에만 표시</option>
+          </select>
+        </div>
+      </div>
+    </aside>
+    <section class="right-pane">
+      <div class="right-head">
+        <button type="button" id="btnExpandLeft" class="ghost iconbtn" hidden title="폴더 패널 펼치기">›</button>
+        <h2 id="rightTitle">모든 노트북</h2>
+        <input type="search" class="nb-search" id="nbFilter" placeholder="노트북과 소스 검색…" />
+      </div>
+      <div class="right-head-scope">
+        <span class="nb-scope-label">노트북 표시</span>
+        <div class="nb-scope-tabs" role="tablist" aria-label="노트북 목록 범위">
+          <button type="button" class="nb-scope-tab" role="tab" data-scope="all" id="btnScopeAll" data-active="0">전체 <span class="nb-scope-count" id="cntScopeAll">0</span></button>
+          <button type="button" class="nb-scope-tab" role="tab" data-scope="mine" id="btnScopeMine" data-active="1">내 노트북 <span class="nb-scope-count" id="cntScopeMine">0</span></button>
+          <button type="button" class="nb-scope-tab" role="tab" data-scope="recommended" id="btnScopeRecommended" data-active="0">추천 노트북 <span class="nb-scope-count" id="cntScopeRec">0</span></button>
+        </div>
+      </div>
+      <div class="right-body">
+        <div id="notebookListWrap"></div>
+        <p class="hint">노트북 목록은 NotebookLM <strong>노트북 목록 화면</strong>이 열린 탭에서 가져옵니다. 비어 있으면 해당 탭을 연 뒤 상단의 「목록 다시 읽기」를 눌러 주세요.</p>
+      </div>
+    </section>
+  </div>
+  <script src="folder-sync-store.js"></script>
+  <script src="folder-manager.js"></script>
+</body>
+</html>

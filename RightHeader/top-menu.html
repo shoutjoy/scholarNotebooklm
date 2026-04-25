@@ -1,0 +1,67 @@
+<!-- NotebookLM 상단(타이틀/헤더)에 주입하는 조각. rightheader.js가 fetch 후 파싱합니다. -->
+<div
+  id="scholar-rh-top-menu-host"
+  class="scholar-rh-top-menu"
+  data-scholar-injected="right-header"
+  aria-label="Scholar header tools"
+>
+  <div class="scholar-rh-scholar-row" id="scholar-rh-scholar-row">
+    <span class="scholar-rh-scholar-badge" title="Google Scholar">G</span>
+    <input
+      type="search"
+      id="scholar-rh-inline-scholar-query"
+      class="scholar-rh-inline-scholar-query"
+      placeholder="Google Scholar 검색…"
+      autocomplete="off"
+      aria-label="Google Scholar 검색어"
+    />
+    <button
+      type="button"
+      id="scholar-rh-scholar-run"
+      class="scholar-rh-btn scholar-rh-btn--compact"
+      title="입력한 키워드로 Google Scholar 검색 (새 탭)"
+    >
+      검색
+    </button>
+    <button
+      type="button"
+      id="scholar-rh-scholar-popup"
+      class="scholar-rh-btn scholar-rh-btn--compact"
+      title="검색 옵션·인용관리 패널 열기"
+    >
+      팝업
+    </button>
+    <button
+      type="button"
+      id="scholar-rh-ref-btn"
+      class="scholar-rh-btn scholar-rh-btn--compact"
+      title="참고문헌·인용 관리 (패널에서 열기)"
+    >
+      인용
+    </button>
+    <button
+      type="button"
+      id="scholar-rh-folder-btn"
+      class="scholar-rh-btn scholar-rh-btn--compact"
+      title="노트북 폴더 관리 창 열기"
+    >
+      폴더
+    </button>
+  </div>
+  <button
+    type="button"
+    id="scholar-rh-gemini-notebook-btn"
+    class="scholar-rh-btn scholar-rh-btn--gemini"
+    title="Gemini 노트북 보기 (새 창)"
+  >
+    Gemini
+  </button>
+  <button
+    type="button"
+    id="scholar-mdeditor-header-btn"
+    class="scholar-rh-btn"
+    title="Markdown Editor 열기"
+  >
+    MDEditor
+  </button>
+</div>

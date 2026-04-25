@@ -6,10 +6,10 @@
   'use strict';
 
   const ROOT_ID = 'scholar-assistant-root';
-  const BTN_ID = 'scholar-assistant-float-btn';
-  const BTN_SMALL_ID = 'scholar-assistant-float-btn-small';
-  const MD_EDITOR_HEADER_BTN_ID = 'scholar-mdeditor-header-btn';
-  const STORAGE_HIDE_MD_EDITOR_HEADER = 'hideMDEditorHeader';
+  /** NotebookLM CDK / studio 모달보다 Assistant 레이어가 위에 오도록 */
+  const SCHOLAR_Z_TOP = '2147483647';
+  const SRH = window.ScholarRightHeader;
+  const { BTN_ID, BTN_SMALL_ID } = SRH.IDS;
   const STORAGE_HIDE_SCHOLAR_SLIDE_STUDIO = 'hideScholarSlideStudio';
   const STORAGE_HIDE_MDPROVIEWER_STUDIO = 'hideMDProViewerStudio';
   const STUDIO_BUTTONS_HOST_MARKER = 'data-scholar-studio-buttons-host';
@@ -17,7 +17,6 @@
   const STUDIO_NOTE_ACTIONS_MARKER = 'data-scholar-studio-note-actions';
   const STUDIO_NOTE_MENU_ACTION_MARKER = 'data-scholar-studio-note-menu-action';
   const STUDIO_NOTE_INLINE_VIEW_MARKER = 'data-scholar-studio-note-inline-view';
-  const PROMPTS_HEADER_BTN_ID = 'scholar-prompts-header-btn';
   const KORTEX_PDF2PPT_MARKER = 'data-scholar-kortex-pdf2ppt';
   const SIDEBAR_ID = 'scholar-assistant-sidebar';
   const STORAGE_FEATURE_NOTEBOOKLM = 'scholarFeatureNotebookLM';
@@ -29,8 +28,7 @@
     toggleSidebarFn = null;
     closeSidebarFn = null;
     try { document.getElementById(ROOT_ID)?.remove(); } catch (_) {}
-    try { document.getElementById(PROMPTS_HEADER_BTN_ID)?.remove(); } catch (_) {}
-    try { document.getElementById(MD_EDITOR_HEADER_BTN_ID)?.remove(); } catch (_) {}
+    try { SRH.removeHeaderInjections(); } catch (_) {}
     try {
       document.querySelectorAll('[data-scholar-studio-prompts="1"]').forEach((el) => el.remove());
     } catch (_) {}
@@ -46,6 +44,13 @@
     } catch (_) {}
     try {
       document.querySelectorAll('[' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"]').forEach((el) => el.remove());
+    } catch (_) {}
+    try {
+      document.querySelectorAll('[data-scholar-folder-ui-root="1"]').forEach((el) => el.remove());
+      document.getElementById('scholar-folder-library-style')?.remove();
+      document.querySelectorAll('[data-scholar-folder-chip="1"]').forEach((el) => el.remove());
+      document.querySelectorAll('[data-scholar-folder-hidden="1"]').forEach((el) => el.removeAttribute('data-scholar-folder-hidden'));
+      document.querySelectorAll('[data-scholar-folder-card-bound="1"]').forEach((el) => el.removeAttribute('data-scholar-folder-card-bound'));
     } catch (_) {}
     try {
       document.querySelectorAll('[data-scholar-msg-btns-injected="1"]').forEach((el) => el.remove());
@@ -118,6 +123,7 @@
     refreshPending: false,
     refreshing: false,
     noteMenuTrackingBound: false,
+    nativeViewInterceptorBound: false,
     storageReady: false,
     initialized: false,
   };
@@ -220,7 +226,7 @@
 
     const root = document.createElement('div');
     root.id = ROOT_ID;
-    root.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483645;';
+    root.style.cssText = `position:fixed;inset:0;pointer-events:none;z-index:${SCHOLAR_Z_TOP};`;
     document.body.appendChild(root);
 
     const baseBtnStyle = `
@@ -254,7 +260,7 @@
     smallBtn.id = BTN_SMALL_ID;
     smallBtn.innerHTML = `학술도구 어시스턴트 ${extVersion}`;
     smallBtn.title = '학술도구 어시스턴트 사이드바 열기/닫기';
-    smallBtn.style.cssText = baseBtnStyle + 'padding: 2px 8px; font-size: 10px; position: fixed; bottom: 8px; left: 8px; margin: 0; z-index: 2147483646;';
+    smallBtn.style.cssText = baseBtnStyle + `padding: 2px 8px; font-size: 10px; position: fixed; bottom: 8px; left: 8px; margin: 0; z-index: ${SCHOLAR_Z_TOP};`;
     smallBtn.onmouseover = () => {
       smallBtn.style.background = '#334155';
       smallBtn.style.transform = 'scale(1.05)';
@@ -283,7 +289,7 @@
       height: ${size.height}px;
       background: #0f172a;
       box-shadow: 4px 0 24px rgba(0,0,0,0.4);
-      z-index: 2147483646;
+      z-index: ${SCHOLAR_Z_TOP};
       transform: translateX(-100%);
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       display: flex;
@@ -548,99 +554,11 @@
     root.appendChild(btn);
     root.appendChild(smallBtn);
     root.appendChild(sidebar);
-    tryPlaceMainButtonNextToCreateNotebook(btn);
-    tryPlaceMainButtonLoop(btn);
-  }
-
-  function tryPlaceMainButtonLoop(btn) {
-    if (findCreateNotebookButton()) return;
-    const obs = new MutationObserver(() => {
-      if (tryPlaceMainButtonNextToCreateNotebook(btn)) obs.disconnect();
-    });
-    obs.observe(document.body, { childList: true, subtree: true });
-    setTimeout(() => {
-      obs.disconnect();
-      tryPlaceMainButtonNextToCreateNotebook(btn);
-    }, 8000);
-  }
-
-  function findCreateNotebookButton() {
-    const keywords = ['노트북 만들기', '새로 만들기', '새 노트 만들기', 'Create Notebook', 'Create notebook'];
-    const candidates = queryAllIncludingShadow(document.body, 'button, [role="button"], a');
-    for (const el of candidates) {
-      const text = (el.textContent || '').trim();
-      if (keywords.some(k => text.includes(k))) return el;
-    }
-    return null;
-  }
-
-  /**
-   * MDEditor를 prompts 버튼 오른쪽(원래 위치)에 둠.
-   * mdBtnOrNull: DOM 연결 전 새 버튼이면 참조를 넘겨야 함.
-   */
-  function repositionMDEditorHeaderButton(mdBtnOrNull) {
-    const mdBtn = mdBtnOrNull || document.getElementById(MD_EDITOR_HEADER_BTN_ID);
-    if (!mdBtn) return;
-    const promptsBtn = document.getElementById(PROMPTS_HEADER_BTN_ID);
-    if (promptsBtn?.parentElement) {
-      promptsBtn.insertAdjacentElement('afterend', mdBtn);
-      return;
-    }
-    const settingsEl = document.querySelector('title-bar-settings');
-    const container = document.querySelector('.notebook-header-buttons-container');
-    if (settingsEl?.parentElement) {
-      settingsEl.insertAdjacentElement('afterend', mdBtn);
-      return;
-    }
-    if (container) container.appendChild(mdBtn);
-  }
-
-  function setMDEditorHeaderButtonHidden(mdBtn, hidden) {
-    if (!mdBtn) return;
-    mdBtn.style.display = hidden ? 'none' : '';
-    mdBtn.setAttribute('aria-hidden', hidden ? 'true' : 'false');
-  }
-
-  function syncMDEditorHeaderButtonVisibility(mdBtn) {
-    const el = mdBtn || document.getElementById(MD_EDITOR_HEADER_BTN_ID);
-    if (!el) return;
     try {
-      chrome.storage.local.get(STORAGE_HIDE_MD_EDITOR_HEADER, (r) => {
-        if (chrome.runtime.lastError) return;
-        const hidden = r[STORAGE_HIDE_MD_EDITOR_HEADER] !== false;
-        setMDEditorHeaderButtonHidden(el, hidden);
-      });
+      document.body.appendChild(root);
     } catch (_) {}
-  }
-
-  function registerHideMDEditorHeaderStorageListener() {
-    try {
-      chrome.storage.onChanged.addListener((changes, area) => {
-        if (area !== 'local' || !changes[STORAGE_HIDE_MD_EDITOR_HEADER]) return;
-        const hidden = changes[STORAGE_HIDE_MD_EDITOR_HEADER].newValue !== false;
-        const btn = document.getElementById(MD_EDITOR_HEADER_BTN_ID);
-        setMDEditorHeaderButtonHidden(btn, hidden);
-      });
-    } catch (_) {}
-  }
-
-  function tryPlaceMainButtonNextToCreateNotebook(btn) {
-    if (!btn || !document.getElementById(BTN_ID)) return;
-    const createBtn = findCreateNotebookButton();
-    if (createBtn) {
-      btn.style.marginLeft = '8px';
-      btn.style.marginRight = '0';
-      createBtn.insertAdjacentElement('beforebegin', btn);
-      return true;
-    }
-    btn.style.position = 'fixed';
-    btn.style.top = '16px';
-    btn.style.right = '16px';
-    btn.style.left = 'auto';
-    btn.style.bottom = 'auto';
-    btn.style.margin = '0';
-    btn.style.zIndex = '2147483646';
-    return false;
+    SRH.tryPlaceMainButtonNextToCreateNotebook(btn, SCHOLAR_Z_TOP);
+    SRH.tryPlaceMainButtonLoop(btn, SCHOLAR_Z_TOP);
   }
 
   const SCHOLAR_STORAGE_KEYS = ['scrappedContent', 'accumulatedScraps', 'promptInput'];
@@ -706,13 +624,78 @@
     }
   }
 
+  /** Main chat composer: pierce shadow roots; support contenteditable (NotebookLM UI updates). */
   function findNotebookLMInput() {
-    const panel = document.querySelector('section.chat-panel') || document.querySelector('chat-panel');
-    if (!panel) return null;
-    const box = panel.querySelector('query-box');
-    return box ? box.querySelector('textarea') : null;
+    const editorSel = 'textarea, [contenteditable="true"], [role="textbox"]';
+    const candidates = queryAllIncludingShadow(document.body, editorSel).filter((el) => {
+      if (!isVisibleElement(el)) return false;
+      const inChat = isInChatArea(el);
+      if (isOnRightSide(el) && !inChat) return false;
+      const studioPanel = el.closest?.('section.studio-panel, studio-panel, [class*="studio-panel"], artifact-library-note, [class*="artifact-library"]');
+      if (studioPanel && isOnRightSide(studioPanel)) return false;
+      const ph = `${el.getAttribute('placeholder') || ''} ${el.getAttribute('aria-label') || ''}`.toLowerCase();
+      if (/입력|ask|query|message|start typing|type a message/i.test(ph)) return true;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 80 || rect.height < 24) return false;
+      if (rect.bottom > window.innerHeight * 0.5) return true;
+      return false;
+    });
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom);
+    return candidates[0];
   }
 
+  function isScholarInjectedUiHost(el) {
+    if (!el || !el.closest) return false;
+    return !!(el.closest(`#${ROOT_ID}, #${SIDEBAR_ID}`));
+  }
+
+  function readEffectiveZIndex(el) {
+    let n = el;
+    for (let i = 0; i < 14 && n; i++) {
+      const z = window.getComputedStyle(n).zIndex;
+      if (z && z !== 'auto') {
+        const num = parseInt(z, 10);
+        if (!Number.isNaN(num)) return num;
+      }
+      n = n.parentElement;
+    }
+    return 0;
+  }
+
+  function pickLargestVisibleEditor(els) {
+    if (!els || !els.length) return null;
+    return els.reduce((best, cur) => {
+      const br = cur.getBoundingClientRect();
+      const bb = best.getBoundingClientRect();
+      return (br.width * br.height) > (bb.width * bb.height) ? cur : best;
+    });
+  }
+
+  function findPrimaryComposerInContainer(container) {
+    if (!container) return null;
+    const editors = queryAllIncludingShadow(container, 'textarea, [contenteditable="true"], [role="textbox"]')
+      .filter((e) => isVisibleElement(e) && !isScholarInjectedUiHost(e));
+    if (!editors.length) return null;
+    return pickLargestVisibleEditor(editors);
+  }
+
+  /** Slide/studio customization: visible CDK or dialog overlay that contains a prompt field. */
+  function findTopStudioOverlayContainer() {
+    const candidates = queryAllIncludingShadow(document.body, '.cdk-overlay-pane, mat-dialog-container, [role="dialog"], .cdk-dialog-container');
+    const valid = candidates.filter((el) => {
+      if (!isVisibleElement(el) || isInChatArea(el) || isScholarInjectedUiHost(el)) return false;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 100 || rect.height < 72) return false;
+      const main = findPrimaryComposerInContainer(el);
+      if (!main) return false;
+      const er = main.getBoundingClientRect();
+      return er.height >= 28 && er.width >= 72;
+    });
+    if (!valid.length) return null;
+    valid.sort((a, b) => readEffectiveZIndex(b) - readEffectiveZIndex(a));
+    return valid[0];
+  }
 
   function isVisibleElement(el) {
     if (!el || !el.getBoundingClientRect) return false;
@@ -722,14 +705,19 @@
   }
 
   function findStudioPromptContainer() {
-    const candidates = queryAllIncludingShadow(document.body, 'section.studio-panel, studio-panel, [class*="studio-panel"], [role="dialog"], mat-dialog-container, .cdk-overlay-pane, .cdk-dialog-container');
-    const filtered = candidates.filter((el) => isVisibleElement(el) && !isInChatArea(el));
-    filtered.sort((a, b) => {
+    const overlay = findTopStudioOverlayContainer();
+    if (overlay) return overlay;
+    const candidates = queryAllIncludingShadow(document.body, 'section.studio-panel, studio-panel, [class*="studio-panel"], artifact-library-note, [class*="artifact-library"], [role="dialog"], mat-dialog-container, .cdk-overlay-pane, .cdk-dialog-container');
+    const filtered = candidates.filter((el) => isVisibleElement(el) && !isInChatArea(el) && !isScholarInjectedUiHost(el));
+    const withEditor = filtered.filter((el) => !!findPrimaryComposerInContainer(el));
+    withEditor.sort((a, b) => {
       const ar = a.getBoundingClientRect();
       const br = b.getBoundingClientRect();
       return (br.width * br.height) - (ar.width * ar.height);
     });
-    return filtered.find((el) => el.querySelector('textarea')) || filtered[0] || null;
+    // 편집기/프롬프트 입력이 있는 컨테이너에서만 주입한다.
+    // 오디오 오버뷰/플레이어처럼 입력창이 없는 패널에 주입되는 것을 방지.
+    return withEditor[0] || filtered.find((el) => !!findPrimaryComposerInContainer(el) || el.querySelector('textarea')) || null;
   }
 
   function isLikelyCloseButton(btn) {
@@ -785,7 +773,8 @@
     const container = findStudioPromptContainer();
     if (!container) return null;
     const textareas = Array.from(queryAllIncludingShadow(container, 'textarea')).filter(isVisibleElement);
-    return textareas[textareas.length - 1] || null;
+    if (textareas.length) return textareas[textareas.length - 1];
+    return findPrimaryComposerInContainer(container);
   }
 
   function setTextareaValue(textarea, text) {
@@ -793,14 +782,73 @@
     const descriptor = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
     if (descriptor?.set) descriptor.set.call(textarea, text);
     else textarea.value = text;
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    try {
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true, data: text }));
+    } catch (_) {
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
     textarea.dispatchEvent(new Event('change', { bubbles: true }));
     textarea.focus();
     return true;
   }
 
-  function findStudioGenerateButton() {
-    const container = findStudioPromptContainer();
+  function setComposerPlainText(el, text) {
+    if (!el) return false;
+    const t = text || '';
+    if (el.matches?.('textarea') || el.tagName === 'TEXTAREA') {
+      return setTextareaValue(el, t);
+    }
+    if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true') {
+      el.focus();
+      try {
+        el.textContent = t;
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: t }));
+      } catch (_) {
+        try {
+          el.innerHTML = '';
+          el.appendChild(document.createTextNode(t));
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        } catch (_) {}
+      }
+      return true;
+    }
+    if (el.matches?.('[role="textbox"]')) {
+      el.focus();
+      el.textContent = t;
+      try {
+        el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      } catch (_) {
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function clearComposerValue(el) {
+    if (!el) return false;
+    if (el.matches?.('textarea') || el.tagName === 'TEXTAREA') {
+      setTextareaValue(el, '');
+      return true;
+    }
+    if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true' || el.matches?.('[role="textbox"]')) {
+      el.focus();
+      el.textContent = '';
+      try {
+        el.innerHTML = '';
+      } catch (_) {}
+      try {
+        el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      } catch (_) {
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function findStudioGenerateButton(containerOverride) {
+    const container = containerOverride || findStudioPromptContainer();
     if (!container) return null;
     const buttons = Array.from(queryAllIncludingShadow(container, 'button, [role="button"]')).filter(isVisibleElement);
     const keywords = [
@@ -814,12 +862,14 @@
   }
 
   async function applyPromptToStudioInput(text, runImmediately = false) {
+    const container = findStudioPromptContainer();
+    if (!container) return { ok: false, reason: 'studio_input_not_found' };
     const textarea = findStudioPromptTextarea();
     if (!textarea) return { ok: false, reason: 'studio_input_not_found' };
-    setTextareaValue(textarea, text || '');
+    if (!setComposerPlainText(textarea, text || '')) return { ok: false, reason: 'studio_set_failed' };
     if (runImmediately) {
       await new Promise((resolve) => setTimeout(resolve, 120));
-      const generateBtn = findStudioGenerateButton();
+      const generateBtn = findStudioGenerateButton(container);
       if (generateBtn) {
         generateBtn.click();
         return { ok: true, executed: true, target: 'studio' };
@@ -829,54 +879,105 @@
   }
 
   function findNotebookLMSendButton() {
-    const panel = document.querySelector('section.chat-panel') || document.querySelector('chat-panel');
-    if (!panel) return null;
-    const box = panel.querySelector('query-box');
-    if (!box) return null;
-    const form = box.querySelector('form');
-    const container = form || box;
-    const buttons = container.querySelectorAll('button');
-    for (const btn of buttons) {
-      if (btn.type === 'submit') return btn;
-      const icon = btn.querySelector('mat-icon');
-      const iconText = icon ? icon.textContent.trim() : '';
-      const label = (btn.getAttribute('aria-label') || '').toLowerCase();
-      if (iconText === 'send' || iconText === 'arrow_upward' || iconText === 'keyboard_arrow_up' || label.includes('send') || label.includes('전송') || label.includes('제출')) {
-        return btn;
+    const composer = findNotebookLMInput();
+    const scopes = [];
+    if (composer) {
+      let n = composer;
+      for (let d = 0; d < 16 && n; d++) {
+        scopes.push(n);
+        const p = n.parentElement;
+        if (p) n = p;
+        else {
+          const r = n.getRootNode?.();
+          n = r && r.host ? r.host : null;
+        }
       }
     }
-    if (form) {
-      const submit = form.querySelector('button[type="submit"]');
-      if (submit) return submit;
+    const panel = document.querySelector('section.chat-panel') || document.querySelector('chat-panel');
+    if (panel) scopes.push(panel);
+
+    for (const scope of scopes) {
+      if (!scope) continue;
+      const candidates = Array.from(queryAllIncludingShadow(scope, 'button, [role="button"]')).filter(isVisibleElement);
+      for (const btn of candidates) {
+        if (isOnRightSide(btn) && !isInChatArea(btn)) continue;
+        if (btn.type === 'submit') return btn;
+        const icon = btn.querySelector('mat-icon');
+        const iconText = icon ? icon.textContent.trim() : '';
+        const label = (btn.getAttribute('aria-label') || '').toLowerCase();
+        if (iconText === 'send' || iconText === 'arrow_upward' || iconText === 'keyboard_arrow_up' || label.includes('send') || label.includes('전송') || label.includes('제출')) {
+          return btn;
+        }
+      }
     }
-    return null;
+    const globalSubmit = queryAllIncludingShadow(document.body, 'button[type="submit"]').filter((b) => isVisibleElement(b) && (!isOnRightSide(b) || isInChatArea(b)));
+    return globalSubmit[0] || null;
   }
 
   function pasteAndExecute(text, runImmediately, sendResponse) {
-    const textarea = findNotebookLMInput();
-    if (!textarea) {
-      sendResponse?.({ ok: false, reason: 'input_not_found' });
-      return;
-    }
-    setTextareaValue(textarea, text || '');
-
-    if (!runImmediately) {
-      sendResponse?.({ ok: true, executed: false });
-      return;
-    }
-    const submitBtn = findNotebookLMSendButton();
-    if (submitBtn) {
-      setTimeout(() => submitBtn.click(), 80);
-      sendResponse?.({ ok: true, executed: true });
-    } else {
-      const form = textarea.closest('form');
-      if (form) {
-        setTimeout(() => form.requestSubmit(), 80);
-        sendResponse?.({ ok: true, executed: true });
+    const runChat = (composer) => {
+      if (!setComposerPlainText(composer, text || '')) {
+        sendResponse?.({ ok: false, reason: 'composer_set_failed' });
+        return;
+      }
+      if (!runImmediately) {
+        sendResponse?.({ ok: true, executed: false, target: 'chat' });
+        return;
+      }
+      const submitBtn = findNotebookLMSendButton();
+      if (submitBtn) {
+        setTimeout(() => submitBtn.click(), 80);
+        sendResponse?.({ ok: true, executed: true, target: 'chat' });
       } else {
-        sendResponse?.({ ok: true, executed: false });
+        const form = composer.closest('form');
+        if (form) {
+          setTimeout(() => form.requestSubmit(), 80);
+          sendResponse?.({ ok: true, executed: true, target: 'chat' });
+        } else {
+          sendResponse?.({ ok: true, executed: false, target: 'chat' });
+        }
+      }
+    };
+
+    const runStudioInContainer = (composer, container) => {
+      if (!setComposerPlainText(composer, text || '')) {
+        sendResponse?.({ ok: false, reason: 'composer_set_failed' });
+        return;
+      }
+      if (!runImmediately) {
+        sendResponse?.({ ok: true, executed: false, target: 'studio' });
+        return;
+      }
+      setTimeout(() => {
+        const gen = findStudioGenerateButton(container);
+        if (gen) gen.click();
+        sendResponse?.({ ok: true, executed: !!gen, target: 'studio' });
+      }, 120);
+    };
+
+    const overlayShell = findTopStudioOverlayContainer();
+    if (overlayShell) {
+      const oc = findPrimaryComposerInContainer(overlayShell);
+      if (oc) {
+        runStudioInContainer(oc, overlayShell);
+        return;
       }
     }
+
+    const composer = findNotebookLMInput();
+    if (composer) {
+      runChat(composer);
+      return;
+    }
+    applyPromptToStudioInput(text || '', runImmediately)
+      .then((studioResult) => {
+        if (studioResult?.ok) {
+          sendResponse?.(studioResult);
+          return;
+        }
+        sendResponse?.({ ok: false, reason: 'input_not_found' });
+      })
+      .catch((e) => sendResponse?.({ ok: false, err: String(e) }));
   }
 
   function findLastCopyButton() {
@@ -1531,6 +1632,73 @@
       } else {
         sendResponse({ ok: false, reason: 'scholar_notebooklm_off' });
       }
+    } else if (message.action === 'openScholarSearchModal') {
+      try {
+        if (window.ScholarSearchShell && typeof window.ScholarSearchShell.openModal === 'function') {
+          window.ScholarSearchShell.openModal();
+        }
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, err: String(e) });
+      }
+      return true;
+    } else if (message.action === 'openScholarRefPanelFromPopup') {
+      try {
+        if (window.ScholarSearchShell && typeof window.ScholarSearchShell.openModal === 'function') {
+          window.ScholarSearchShell.openModal();
+        }
+        setTimeout(() => {
+          try {
+            if (typeof window.toggleScholarRefPanel === 'function') window.toggleScholarRefPanel();
+          } catch (_) {}
+        }, 120);
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, err: String(e) });
+      }
+      return true;
+    } else if (message.action === 'runScholarSearchFromPopup') {
+      try {
+        const q = String(message.query || '').trim();
+        if (!q) {
+          try {
+            if (typeof window.__scholarShowToast === 'function') window.__scholarShowToast('검색어를 입력해 주세요.');
+          } catch (_) {}
+          sendResponse({ ok: false, reason: 'empty_query' });
+          return true;
+        }
+        if (window.ScholarSearchShell && typeof window.ScholarSearchShell.openSearchWindow === 'function') {
+          window.ScholarSearchShell.openSearchWindow(q, { lang: 'ko' });
+        } else {
+          try {
+            const params = new URLSearchParams();
+            params.set('q', q);
+            params.set('hl', 'ko');
+            params.set('lr', 'lang_ko');
+            params.set('as_vis', '1');
+            const url = 'https://scholar.google.com/scholar?' + params.toString();
+            const win = window.open(url, '_blank', 'noopener,noreferrer,width=1200,height=900');
+            if (!win && typeof window.__scholarShowToast === 'function') {
+              window.__scholarShowToast('팝업이 차단되었습니다. 이 사이트에서 팝업을 허용해 주세요.');
+            }
+          } catch (_) {}
+        }
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, err: String(e) });
+      }
+      return true;
+    } else if (message.action === 'peekViewScrapStudioMemo') {
+      peekViewScrapStudioMemo()
+        .then((r) => sendResponse(r))
+        .catch((e) => sendResponse({ ok: false, err: String(e) }));
+      return true;
+    } else if (message.action === 'applyViewScrapToStudioMemo') {
+      const mode = message.mode === 'append' ? 'append' : 'replace';
+      saveViewScrapToStudioMemoNative(message.text || '', mode)
+        .then((r) => sendResponse(r))
+        .catch((e) => sendResponse({ ok: false, err: String(e) }));
+      return true;
     } else if (message.action === 'pasteAndExecute') {
       const runImmediately = message.runImmediately !== false;
       pasteAndExecute(message.text || '', runImmediately, sendResponse);
@@ -1560,7 +1728,7 @@
           const frame = document.querySelector('#scholar-assistant-sidebar iframe');
           try { frame?.contentWindow?.postMessage({ type: 'scholarApplyConversationSaveVisibility', hidden: message.hideConversationSave }, '*'); } catch (_) {}
         }
-        syncMDEditorHeaderButtonVisibility();
+        SRH.syncMDEditorHeaderButtonVisibility();
         syncStudioButtonsVisibilityFromStorage();
         setTimeout(() => syncStudioButtonsVisibilityFromStorage(), 150);
         setTimeout(() => injectStudioButtons(), 300);
@@ -1575,121 +1743,32 @@
         .catch((e) => sendResponse({ ok: false, err: String(e) }));
       return true;
     } else if (message.action === 'clearNotebookLMInput') {
-      const textarea = findNotebookLMInput();
-      if (!textarea) {
-        sendResponse({ ok: false });
+      const overlayShell = findTopStudioOverlayContainer();
+      if (overlayShell) {
+        const oc = findPrimaryComposerInContainer(overlayShell);
+        if (oc && clearComposerValue(oc)) {
+          sendResponse({ ok: true, target: 'studio' });
+          return true;
+        }
+      }
+      const composer = findNotebookLMInput();
+      if (composer && clearComposerValue(composer)) {
+        sendResponse({ ok: true, target: 'chat' });
         return true;
       }
-      textarea.focus();
-      textarea.select();
-      textarea.value = '';
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
-      textarea.dispatchEvent(new Event('change', { bubbles: true }));
-      sendResponse({ ok: true });
-    }
-    return true;
-  });
-
-  function initPromptsButton() {
-    const existingPrompts = document.getElementById(PROMPTS_HEADER_BTN_ID);
-    const existingMd = document.getElementById(MD_EDITOR_HEADER_BTN_ID);
-    if (existingPrompts?.isConnected && existingMd?.isConnected) {
-      repositionMDEditorHeaderButton(existingMd);
-      syncMDEditorHeaderButtonVisibility(existingMd);
+      const studioTa = findStudioPromptTextarea();
+      if (studioTa) {
+        if (studioTa.matches?.('textarea') || studioTa.tagName === 'TEXTAREA') setTextareaValue(studioTa, '');
+        else clearComposerValue(studioTa);
+        sendResponse({ ok: true, target: 'studio' });
+        return true;
+      }
+      sendResponse({ ok: false });
       return true;
     }
-
-    const settingsEl = document.querySelector('title-bar-settings');
-    const container = document.querySelector('.notebook-header-buttons-container');
-    const target = settingsEl || container;
-    if (!target) return false;
-
-    let btn = document.getElementById(PROMPTS_HEADER_BTN_ID);
-    if (!btn) {
-      btn = document.createElement('button');
-      btn.id = PROMPTS_HEADER_BTN_ID;
-      btn.textContent = 'prompts';
-      btn.title = '저장된 프롬프트';
-      btn.style.cssText = `
-        margin-left: 8px;
-        padding: 6px 12px;
-        font-size: 12px;
-        font-weight: 600;
-        color: #94a3b8;
-        background: #334155;
-        border: 1px solid #475569;
-        border-radius: 6px;
-        cursor: pointer;
-        font-family: inherit;
-        transition: background 0.2s, color 0.2s;
-      `;
-      btn.onmouseover = () => {
-        btn.style.background = '#475569';
-        btn.style.color = '#e2e8f0';
-      };
-      btn.onmouseout = () => {
-        btn.style.background = '#334155';
-        btn.style.color = '#94a3b8';
-      };
-      btn.onclick = () => {
-        chrome.runtime.sendMessage({ action: 'openPromptsWindow' }, (res) => {
-          if (!res?.ok) window.open(chrome.runtime.getURL('prompts/prompts.html'), '_blank', 'width=900,height=750');
-        });
-      };
-      
-      if (settingsEl) {
-        settingsEl.insertAdjacentElement('afterend', btn);
-      } else if (container) {
-        container.appendChild(btn);
-      }
-    }
-
-    let mdBtn = document.getElementById(MD_EDITOR_HEADER_BTN_ID);
-    if (!mdBtn) {
-      mdBtn = document.createElement('button');
-      mdBtn.id = MD_EDITOR_HEADER_BTN_ID;
-      mdBtn.textContent = 'MDEditor';
-      mdBtn.title = 'Markdown Editor 열기';
-      mdBtn.style.cssText = `
-        margin-left: 8px;
-        padding: 6px 12px;
-        font-size: 12px;
-        font-weight: 600;
-        color: #94a3b8;
-        background: #334155;
-        border: 1px solid #475569;
-        border-radius: 6px;
-        cursor: pointer;
-        font-family: inherit;
-        transition: background 0.2s, color 0.2s;
-      `;
-      mdBtn.onmouseover = () => {
-        mdBtn.style.background = '#475569';
-        mdBtn.style.color = '#e2e8f0';
-      };
-      mdBtn.onmouseout = () => {
-        mdBtn.style.background = '#334155';
-        mdBtn.style.color = '#94a3b8';
-      };
-      mdBtn.onclick = async () => {
-        const url = await getConfiguredToMDUrl();
-        openConfiguredToMD(url);
-      };
-    }
-
-    repositionMDEditorHeaderButton(mdBtn);
-    syncMDEditorHeaderButtonVisibility(mdBtn);
-    return true;
-  }
-
-  function tryInitPromptsButton() {
-    if (initPromptsButton()) return;
-    const obs = new MutationObserver(() => {
-      if (initPromptsButton()) obs.disconnect();
-    });
-    obs.observe(document.body, { childList: true, subtree: true });
-    setTimeout(() => obs.disconnect(), 25000);
-  }
+    /* 처리하지 않은 action은 sendResponse 없이 두어야 함 — return true만 하면
+       폴더 UI 등 다른 onMessage 리스너의 비동기 sendResponse와 충돌할 수 있음 */
+  });
 
   /** chat-message 내 복사 버튼 찾기 (Shadow DOM 포함) */
   function findCopyButtonInMessage(msg) {
@@ -1774,10 +1853,17 @@
     return null;
   }
 
-  /** '메모에 저장' 버튼 근처에 액션 바가 있는 컨테이너 찾기 (fallback) */
+  /** Studio 메모/소스 변환 버튼 근처 액션 바 컨테이너 찾기 (fallback) */
   function findActionBarByMemoButton() {
     try {
-      const memoKeywords = ['메모에 저장', 'Save to Memo', 'Save to memo', 'memo'];
+      const memoKeywords = [
+        '소스로 변환',
+        '소스형태로 변환',
+        '메모에 저장',
+        'Save to Memo',
+        'Save to memo',
+        'memo',
+      ];
       const panel = document.querySelector('section.chat-panel') || document.querySelector('chat-panel');
       const root = panel || document.body;
       const allButtons = root.querySelectorAll('button, [role="button"]');
@@ -1963,7 +2049,7 @@
     }
   }
 
-  /** 메모에 저장 버튼 근처에 스크랩/ToMD 추가 (fallback - msg는 해당 툴바가 속한 메시지 블록) */
+  /** Studio 메모/소스 버튼 근처에 스크랩/ToMD 추가 (fallback - msg는 해당 툴바가 속한 메시지 블록) */
   function injectButtonsViaMemoFallback() {
     const found = findActionBarByMemoButton();
     if (!found) return;
@@ -2403,16 +2489,45 @@
   }
 
   // 버튼만 정확히 찾아 붙이기(메뉴/다른 영역 제외)
-  function findStudioNoteConvertButtons() {
-    return queryAllIncludingShadow(document.body, 'button, [role="button"]').filter((btn) => {
-      if (!isVisibleElement(btn)) return false;
-      if (!findClosestStudioNotePanelFromNode(btn)) return false;
-      if (btn.hasAttribute(STUDIO_NOTE_INLINE_VIEW_MARKER)) return false;
-      if (btn.closest('[role="menu"], [class*="menu"], [class*="Menu"]')) return false;
-      if (btn.closest('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]')) return false;
-      const text = `${btn.textContent || ''} ${btn.getAttribute('aria-label') || ''} ${btn.getAttribute('title') || ''}`.replace(/\s+/g, ' ').trim();
-      return isStudioSourceConvertLabel(text);
-    });
+  function findStudioNoteInlineViewAnchorButtons() {
+    const out = [];
+    const seenPanel = new Set();
+
+    // 1) 메모: 소스로 변환(네이티브 버튼) 옆에 보기
+    try {
+      const convertBtns = queryAllIncludingShadow(document.body, 'button.convert-to-source-button').filter(isVisibleElement);
+      convertBtns.forEach((btn) => {
+        const panel = findClosestStudioNotePanelFromNode(btn);
+        if (!panel || !isStudioNoteDetailPanel(panel)) return;
+        if (seenPanel.has(panel)) return;
+        seenPanel.add(panel);
+        out.push(btn);
+      });
+    } catch (_) {}
+
+    // 2) 보고서: "유용한 보고서/유용하지 않은 보고서" 버튼 우측에 보기 (두 버튼 중 마지막을 앵커로)
+    try {
+      const panels = findStudioNotePanels().filter((p) => isStudioNoteDetailPanel(p));
+      for (const panel of panels) {
+        if (seenPanel.has(panel)) continue;
+        const ratingBtns = queryAllIncludingShadow(panel, 'button, [role="button"]')
+          .filter((btn) => {
+            if (!isVisibleElement(btn)) return false;
+            if (btn.hasAttribute?.(STUDIO_NOTE_INLINE_VIEW_MARKER)) return false;
+            if (btn.closest?.('[role="menu"], [class*="menu"], [class*="Menu"]')) return false;
+            const label = `${btn.textContent || ''} ${btn.getAttribute?.('aria-label') || ''} ${btn.getAttribute?.('title') || ''}`
+              .replace(/\s+/g, ' ')
+              .trim();
+            return /유용한\s*보고서/i.test(label) || /유용하지\s*않은\s*보고서/i.test(label) || /Helpful\s*report/i.test(label) || /Not\s*helpful\s*report/i.test(label);
+          });
+        if (!ratingBtns.length) continue;
+        const anchor = ratingBtns[ratingBtns.length - 1];
+        out.push(anchor);
+        seenPanel.add(panel);
+      }
+    } catch (_) {}
+
+    return out;
   }
 
   function findClosestStudioNotePanelFromNode(node) {
@@ -2427,22 +2542,87 @@
     return null;
   }
 
+  function dedupeStudioPanelsInnermost(panels) {
+    if (!panels || panels.length <= 1) return panels || [];
+    return panels.filter((p) => !panels.some((other) => other !== p && p.contains(other)));
+  }
+
+  function collectStudioNotePanelsFromContainers(containers, editorSelector, seen) {
+    const out = [];
+    for (const container of containers) {
+      if (!isVisibleElement(container)) continue;
+      let editors = [];
+      try {
+        editors = queryAllIncludingShadow(container, editorSelector).filter(isVisibleElement);
+      } catch (_) {}
+      if (!editors.length) continue;
+      if (seen.has(container)) continue;
+      seen.add(container);
+      out.push(container);
+    }
+    return out;
+  }
+
   function findStudioNotePanels() {
     const containerSelector = 'artifact-library-note, [class*="artifact-library-note"], section.studio-panel, studio-panel, [class*="studio-panel"], [class*="StudioPanel"]';
     const editorSelector = '[contenteditable="true"], textarea, .ProseMirror, [role="textbox"]';
-    const editorCandidates = queryAllIncludingShadow(document.body, editorSelector)
-      .filter((el) => {
-        if (!isVisibleElement(el) || !isOnRightSide(el)) return false;
-        const text = getVisibleElementText(el);
-        return text.length >= 20;
-      });
-
-    const panels = [];
     const seen = new Set();
+    let panels = [];
+
+    try {
+      const containersRight = queryAllIncludingShadow(document.body, containerSelector).filter(
+        (el) => isVisibleElement(el) && isOnRightSide(el)
+      );
+      panels.push(...collectStudioNotePanelsFromContainers(containersRight, editorSelector, seen));
+    } catch (_) {}
+
+    if (panels.length === 0) {
+      try {
+        const containersLoose = queryAllIncludingShadow(document.body, containerSelector).filter((el) => {
+          if (!isVisibleElement(el)) return false;
+          try {
+            const rect = el.getBoundingClientRect();
+            return rect.left > window.innerWidth * 0.26 && rect.width > 48;
+          } catch (_) {
+            return false;
+          }
+        });
+        panels.push(...collectStudioNotePanelsFromContainers(containersLoose, editorSelector, seen));
+      } catch (_) {}
+    }
+
+    if (panels.length === 0) {
+      try {
+        const artifactOnly = queryAllIncludingShadow(document.body, 'artifact-library-note, [class*="artifact-library-note"]').filter(
+          (el) => isVisibleElement(el) && !isInChatArea(el)
+        );
+        panels.push(...collectStudioNotePanelsFromContainers(artifactOnly, editorSelector, seen));
+      } catch (_) {}
+    }
+
+    let editorCandidates = [];
+    try {
+      editorCandidates = queryAllIncludingShadow(document.body, editorSelector).filter((el) => {
+        if (!isVisibleElement(el)) return false;
+        try {
+          const rect = el.getBoundingClientRect();
+          if (rect.left <= window.innerWidth * 0.24) return false;
+        } catch (_) {
+          return false;
+        }
+        const text = getVisibleElementText(el);
+        return text.length >= 8;
+      });
+    } catch (_) {}
+
     for (const editor of editorCandidates) {
       let current = editor;
       while (current && current !== document.body) {
-        if (current.matches?.(containerSelector) && isVisibleElement(current) && isOnRightSide(current)) {
+        if (current.matches?.(containerSelector) && isVisibleElement(current)) {
+          try {
+            const rect = current.getBoundingClientRect();
+            if (rect.left <= window.innerWidth * 0.22) break;
+          } catch (_) {}
           if (!seen.has(current)) {
             seen.add(current);
             panels.push(current);
@@ -2452,7 +2632,36 @@
         current = current.parentElement || current.getRootNode?.()?.host || null;
       }
     }
-    return panels.sort((a, b) => {
+
+    /** 보고서·학습 가이드 등 읽기 전용 스튜디오 본문(에디터 없음) */
+    try {
+      const readonlyCandidates = queryAllIncludingShadow(document.body, containerSelector).filter((el) => {
+        if (!isVisibleElement(el) || isInChatArea(el)) return false;
+        try {
+          const rect = el.getBoundingClientRect();
+          if (rect.left <= window.innerWidth * 0.22) return false;
+        } catch (_) {
+          return false;
+        }
+        return true;
+      });
+      for (const container of readonlyCandidates) {
+        if (seen.has(container)) continue;
+        let editors = [];
+        try {
+          editors = queryAllIncludingShadow(container, editorSelector).filter(isVisibleElement);
+        } catch (_) {}
+        if (editors.length) continue;
+        const t = extractVisibleStudioNoteText(container);
+        if (t.length >= 80) {
+          seen.add(container);
+          panels.push(container);
+        }
+      }
+    } catch (_) {}
+
+    const innermost = dedupeStudioPanelsInnermost(panels);
+    return innermost.sort((a, b) => {
       try {
         const rectA = a.getBoundingClientRect();
         const rectB = b.getBoundingClientRect();
@@ -2461,6 +2670,204 @@
         return 0;
       }
     });
+  }
+
+  const STUDIO_MEMO_PANEL_ID_ATTR = 'data-scholar-memo-panel-id';
+
+  function ensureMemoPanelId(panel) {
+    if (!panel) return null;
+    try {
+      let id = panel.getAttribute(STUDIO_MEMO_PANEL_ID_ATTR);
+      if (!id || !String(id).trim()) {
+        id = 'scholar-memo-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+        panel.setAttribute(STUDIO_MEMO_PANEL_ID_ATTR, id);
+      }
+      return id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function findStudioNotePrimaryEditor(panel) {
+    if (!panel) return null;
+    const candidates = queryAllIncludingShadow(panel, '[contenteditable="true"], textarea, .ProseMirror, [role="textbox"]')
+      .filter((el) => isVisibleElement(el) && !el.closest('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]'));
+    if (!candidates.length) return null;
+    let best = candidates[0];
+    let bestScore = -1;
+    for (const el of candidates) {
+      let len = 0;
+      try {
+        if (el.matches?.('textarea')) len = (el.value || '').length;
+        else len = (getVisibleElementText(el) || '').length;
+      } catch (_) {}
+      if (len > bestScore) {
+        bestScore = len;
+        best = el;
+      }
+    }
+    return best;
+  }
+
+  async function resolveViewScrapMemoPanelFromStorage() {
+    let panelId = null;
+    let fingerprint = null;
+    try {
+      const data = await chrome.storage.local.get(['viewScrapMemoPanelId', 'viewScrapMemoFingerprint']);
+      panelId = data.viewScrapMemoPanelId;
+      fingerprint = data.viewScrapMemoFingerprint || null;
+    } catch (_) {}
+    if (!panelId && !fingerprint) return null;
+
+    let panels = findStudioNotePanels();
+    let panel = panelId ? panels.find((p) => p.getAttribute(STUDIO_MEMO_PANEL_ID_ATTR) === panelId) : null;
+
+    if (!panel && typeof fingerprint === 'string' && fingerprint.trim().length >= 10) {
+      const fpNorm = fingerprint.trim().replace(/\s+/g, ' ');
+      const head = fpNorm.slice(0, 96);
+      for (const p of panels) {
+        try {
+          const md = (extractVisibleStudioNoteMarkdown(p) || '').trim().replace(/\s+/g, ' ');
+          if (md.length < 4) continue;
+          if (head.length >= 10 && (md.startsWith(head.slice(0, Math.min(48, head.length))) || fpNorm.startsWith(md.slice(0, Math.min(48, md.length))))) {
+            panel = p;
+            break;
+          }
+          if (head.length >= 16 && md.includes(head.slice(0, 32))) {
+            panel = p;
+            break;
+          }
+        } catch (_) {}
+      }
+      if (panel) {
+        const newId = ensureMemoPanelId(panel);
+        try {
+          await chrome.storage.local.set({ viewScrapMemoPanelId: newId });
+        } catch (_) {}
+        panelId = newId;
+      }
+    }
+
+    if (!panel && panels.length === 1) {
+      panel = panels[0];
+      const newId = ensureMemoPanelId(panel);
+      try {
+        await chrome.storage.local.set({ viewScrapMemoPanelId: newId });
+      } catch (_) {}
+      panelId = newId;
+    }
+
+    if (!panel && panels.length > 1) {
+      try {
+        const withActions = panels.filter((p) => p.querySelector('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]'));
+        if (withActions.length === 1) {
+          panel = withActions[0];
+          const newId = ensureMemoPanelId(panel);
+          await chrome.storage.local.set({ viewScrapMemoPanelId: newId });
+          panelId = newId;
+        }
+      } catch (_) {}
+    }
+
+    if (!panel) return null;
+    const editor = findStudioNotePrimaryEditor(panel);
+    if (!editor) return null;
+    return { panel, editor, panelId: panel.getAttribute(STUDIO_MEMO_PANEL_ID_ATTR) || panelId };
+  }
+
+  async function peekViewScrapStudioMemo() {
+    const resolved = await resolveViewScrapMemoPanelFromStorage();
+    if (!resolved) return { ok: false, reason: 'no_memo_context' };
+    const md = (extractVisibleStudioNoteMarkdown(resolved.panel) || '').trim();
+    const hasContent = md.length >= 24;
+    return { ok: true, hasContent, charCount: md.length };
+  }
+
+  /**
+   * NotebookLM Studio 메모 푸터의 공식 「소스로 변환」 버튼만 클릭 (클래스 고정)
+   */
+  function tryClickConvertToSourceButton(panel, editor) {
+    const roots = [];
+    const push = (el) => {
+      if (el && typeof el.querySelector === 'function') roots.push(el);
+    };
+    push(panel);
+    try {
+      push(panel?.closest?.('studio-panel'));
+      push(panel?.closest?.('section.studio-panel'));
+      push(panel?.closest?.('.studio-panel'));
+      push(panel?.closest?.('[class*="studio-panel"]'));
+      push(panel?.closest?.('notebook'));
+      push(panel?.closest?.('labs-tailwind-root'));
+    } catch (_) {}
+    push(document.body);
+
+    const seenRoot = new Set();
+    const uniqRoots = roots.filter((r) => r && !seenRoot.has(r) && seenRoot.add(r));
+    const seenBtn = new Set();
+    for (const root of uniqRoots) {
+      let candidates = [];
+      try {
+        candidates = queryAllIncludingShadow(root, 'button.convert-to-source-button');
+      } catch (_) {
+        continue;
+      }
+      for (const btn of candidates) {
+        if (seenBtn.has(btn)) continue;
+        seenBtn.add(btn);
+        if (!isVisibleElement(btn)) continue;
+        try {
+          if (btn.closest('section.chat-panel, chat-panel, [class*="chat-panel"], [class*="ChatPanel"]')) continue;
+        } catch (_) {}
+        if (btn.closest('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]')) continue;
+        if (btn.closest('[' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"]')) continue;
+        try {
+          btn.click();
+          return { clicked: true };
+        } catch (_) {}
+      }
+    }
+    try {
+      editor?.focus?.();
+      editor?.dispatchEvent?.(new Event('input', { bubbles: true }));
+      editor?.dispatchEvent?.(new Event('change', { bubbles: true }));
+      editor?.blur?.();
+    } catch (_) {}
+    return { clicked: false };
+  }
+
+  async function saveViewScrapToStudioMemoNative(markdownText, mode) {
+    const text = String(markdownText || '').trim();
+    if (!text) {
+      return { ok: false, reason: 'empty' };
+    }
+    const resolved = await resolveViewScrapMemoPanelFromStorage();
+    if (!resolved) {
+      return { ok: false, reason: 'no_memo_context' };
+    }
+    const { panel, editor } = resolved;
+    let finalText = text;
+
+    if (mode === 'append') {
+      const existing = (extractVisibleStudioNoteMarkdown(panel) || '').trim();
+      finalText = existing.length >= 8 ? `${existing}\n\n---\n\n${text}` : text;
+    } else {
+      clearComposerValue(editor);
+      await new Promise((r) => setTimeout(r, 40));
+    }
+
+    if (!setComposerPlainText(editor, finalText)) {
+      return { ok: false, reason: 'set_failed' };
+    }
+    await new Promise((r) => setTimeout(r, 340));
+    const native = tryClickConvertToSourceButton(panel, editor);
+    if (!native.clicked) {
+      return { ok: false, reason: 'no_convert_button' };
+    }
+    try {
+      await chrome.storage.local.set({ scrappedContent: finalText });
+    } catch (_) {}
+    return { ok: true, nativeUi: true };
   }
 
   function getStudioArtifactNoteCard(el) {
@@ -2645,7 +3052,7 @@
     const previousPanels = findStudioNotePanels();
     const previousPanel = previousPanels[0] || null;
     const previousTitle = previousPanel ? getStudioNoteTitle(previousPanel) : '';
-    const previousText = previousPanel ? extractVisibleStudioNoteText(previousPanel) : '';
+    const previousText = previousPanel ? extractVisibleStudioNoteMarkdown(previousPanel) : '';
     const noteTitle = getStudioNoteCardTitle(noteCard);
     clickStudioNoteOpenTarget(noteCard);
     await new Promise((resolve) => setTimeout(resolve, 90));
@@ -2656,7 +3063,7 @@
       const panels = findStudioNotePanels();
       const panel = panels[0] || null;
       if (!panel) continue;
-      const text = extractVisibleStudioNoteText(panel);
+      const text = extractVisibleStudioNoteMarkdown(panel);
       const currentTitle = getStudioNoteTitle(panel);
       const changedFromPrevious = !!text && text !== previousText;
       if (text.length >= 20 && (currentTitle === noteTitle || currentTitle !== previousTitle || changedFromPrevious || i >= 8)) {
@@ -2665,7 +3072,7 @@
     }
 
     const fallbackPanel = findStudioNotePanels()[0] || null;
-    const fallbackText = fallbackPanel ? extractVisibleStudioNoteText(fallbackPanel) : '';
+    const fallbackText = fallbackPanel ? extractVisibleStudioNoteMarkdown(fallbackPanel) : '';
     if (fallbackText.length >= 8) {
       return downloadPlainTextFile(noteTitle, 'md', fallbackText) || false;
     }
@@ -2706,10 +3113,21 @@
     return true;
   }
 
-  async function openStudioNoteInViewScrap(text) {
+  async function openStudioNoteInViewScrap(text, opts) {
     if (!text?.trim()) return false;
+    const panel = opts && opts.panel && opts.panel.isConnected ? opts.panel : null;
+    const payload = { scrappedContent: text };
+    if (panel) {
+      const id = ensureMemoPanelId(panel);
+      payload.viewScrapMemoPanelId = id || null;
+      const norm = String(text || '').trim().replace(/\s+/g, ' ');
+      payload.viewScrapMemoFingerprint = norm.length ? norm.slice(0, 320) : null;
+    } else {
+      payload.viewScrapMemoPanelId = null;
+      payload.viewScrapMemoFingerprint = null;
+    }
     try {
-      await chrome.storage.local.set({ scrappedContent: text });
+      await chrome.storage.local.set(payload);
     } catch (_) {}
     const fallback = () => {
       try {
@@ -2746,13 +3164,13 @@
       if (!panel) return;
       const text = extractVisibleStudioNoteMarkdown(panel);
       if (!text?.trim()) return;
-      await openStudioNoteInViewScrap(text);
+      await openStudioNoteInViewScrap(text, { panel });
     });
     return btn;
   }
 // 메모 패널 추적 후 본문 추출해서 기존 보기창 열기 연결:
   function syncStudioNoteInlineViewButtons() {
-    const sourceButtons = findStudioNoteConvertButtons();
+    const sourceButtons = findStudioNoteInlineViewAnchorButtons();
     const sourceIds = new Set();
 
     sourceButtons.forEach((sourceBtn, index) => {
@@ -2807,11 +3225,16 @@
     if (!panels.length) return false;
 
     panels.forEach((panel) => {
+      if (!isStudioNoteDetailPanel(panel)) {
+        try { panel.querySelector('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]')?.remove?.(); } catch (_) {}
+        return;
+      }
+      ensureMemoPanelId(panel);
       let host = panel.querySelector('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]');
       if (!host) {
         host = document.createElement('div');
         host.setAttribute(STUDIO_NOTE_ACTIONS_MARKER, '1');
-        host.style.cssText = 'position:sticky;bottom:0;left:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%;padding:12px 0 0;margin-top:12px;background:linear-gradient(180deg, rgba(17,24,39,0) 0%, rgba(17,24,39,0.88) 24%, rgba(17,24,39,1) 100%);z-index:5;';
+        host.style.cssText = 'position:sticky;bottom:0;left:0;display:flex;justify-content:flex-end;gap:8px;width:100%;padding:12px 0 0;margin-top:12px;background:linear-gradient(180deg, rgba(17,24,39,0) 0%, rgba(17,24,39,0.88) 24%, rgba(17,24,39,1) 100%);z-index:5;';
         panel.appendChild(host);
       }
 
@@ -2824,43 +3247,14 @@
         return btn;
       };
 
-      ensureButton('[data-note-action="txt"]', () => {
-        const btn = createStudioNoteActionButton('TXT 저장', 'secondary', async () => {
-          const text = extractVisibleStudioNoteText(panel);
-          if (!text) return;
-          downloadPlainTextFile(getStudioNoteTitle(panel), 'txt', text);
-        });
-        btn.setAttribute('data-note-action', 'txt');
-        return btn;
-      });
-
-      ensureButton('[data-note-action="md"]', () => {
-        const btn = createStudioNoteActionButton('MD 저장', 'secondary', async () => {
-          const text = extractVisibleStudioNoteText(panel);
-          if (!text) return;
-          downloadPlainTextFile(getStudioNoteTitle(panel), 'md', text);
-        });
-        btn.setAttribute('data-note-action', 'md');
-        return btn;
-      });
-
-      ensureButton('[data-note-action="preview"]', () => {
-        const btn = createStudioNoteActionButton('MD 보기', 'secondary', async () => {
+      // Studio 하단에는 보기 버튼만 노출 (메모/보고서 동일 UX)
+      ensureButton('[data-note-action="view"]', () => {
+        const btn = createStudioNoteActionButton('보기', 'secondary', async () => {
           const text = extractVisibleStudioNoteMarkdown(panel);
           if (!text) return;
-          await openStudioNoteInViewScrap(text);
+          await openStudioNoteInViewScrap(text, { panel });
         });
-        btn.setAttribute('data-note-action', 'preview');
-        return btn;
-      });
-
-      ensureButton('[data-note-action="tomd"]', () => {
-        const btn = createStudioNoteActionButton('ToMD로 보내기', 'primary', async () => {
-          const text = extractVisibleStudioNoteText(panel);
-          if (!text) return;
-          await sendStudioNoteTextToMD(text);
-        });
-        btn.setAttribute('data-note-action', 'tomd');
+        btn.setAttribute('data-note-action', 'view');
         return btn;
       });
     });
@@ -2906,6 +3300,63 @@
       lastStudioNoteMenuCard = getStudioArtifactNoteCard(button);
       setTimeout(() => scheduleStudioButtonsRefresh(), 30);
     }, true);
+  }
+
+  function bindNativeStudioViewInterceptor() {
+    if (studioButtonsState.nativeViewInterceptorBound) return;
+    studioButtonsState.nativeViewInterceptorBound = true;
+    document.addEventListener(
+      'click',
+      (event) => {
+        const btn = event.target?.closest?.('button, [role="button"]');
+        if (!btn) return;
+        try {
+          if (btn.closest('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]')) return;
+          if (btn.closest('[' + STUDIO_NOTE_MENU_ACTION_MARKER + '="1"]')) return;
+          if (btn.closest('[' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"]')) return;
+        } catch (_) {}
+        if (isInChatArea(btn)) return;
+
+        const label = `${btn.textContent || ''} ${btn.getAttribute?.('aria-label') || ''} ${btn.getAttribute?.('title') || ''}`
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (label !== '보기') return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        (async () => {
+          for (let i = 0; i < 14; i++) {
+            const panel = findStudioNotePanels()[0] || null;
+            const md = (extractVisibleStudioNoteMarkdown(panel) || '').trim();
+            if (md.length >= 40) {
+              await openStudioNoteInViewScrap(md, { panel });
+              return;
+            }
+            await new Promise((r) => setTimeout(r, 120));
+          }
+        })().catch(() => {});
+      },
+      true
+    );
+  }
+
+  function isStudioNoteDetailPanel(panel) {
+    if (!panel) return false;
+    // 스튜디오 홈(타일/리스트)에는 보기를 주입하지 않기 위한 완화된 가드
+    try {
+      const candidates = queryAllIncludingShadow(panel, 'h1,h2,h3,div,span,p').filter(isVisibleElement);
+      for (let i = 0; i < Math.min(24, candidates.length); i++) {
+        const t = getVisibleElementText(candidates[i]).replace(/\s+/g, ' ').trim();
+        if (/^스튜디오\s*>\s*/.test(t)) return true;
+      }
+    } catch (_) {}
+    // fallback: 본문이 충분히 길면 상세로 간주
+    try {
+      const md = (extractVisibleStudioNoteMarkdown(panel) || '').trim();
+      if (md.length >= 200) return true;
+    } catch (_) {}
+    return false;
   }
 
   function createStudioNoteMenuActionItem(menu) {
@@ -3211,8 +3662,8 @@
   function isStudioInjectedNode(node) {
     if (!node || node.nodeType !== 1) return false;
     if (node.id === STUDIO_VISIBILITY_STYLE_ID) return true;
-    if (node.matches?.('[data-scholar-studio-prompts="1"], [data-scholar-studio-action], [' + STUDIO_BUTTONS_HOST_MARKER + '="1"], [' + STUDIO_NOTE_ACTIONS_MARKER + '="1"], [' + STUDIO_NOTE_MENU_ACTION_MARKER + '="1"], [' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"], [' + KORTEX_PDF2PPT_MARKER + '="1"]')) return true;
-    return !!node.closest?.('[data-scholar-studio-prompts="1"], [data-scholar-studio-action], [' + STUDIO_BUTTONS_HOST_MARKER + '="1"], [' + STUDIO_NOTE_ACTIONS_MARKER + '="1"], [' + STUDIO_NOTE_MENU_ACTION_MARKER + '="1"], [' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"], [' + KORTEX_PDF2PPT_MARKER + '="1"]');
+    if (node.matches?.('[data-scholar-studio-prompts="1"], [data-scholar-studio-action], [' + STUDIO_BUTTONS_HOST_MARKER + '="1"], [' + STUDIO_NOTE_ACTIONS_MARKER + '="1"], [' + STUDIO_NOTE_MENU_ACTION_MARKER + '="1"], [' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"], [' + KORTEX_PDF2PPT_MARKER + '="1"], [data-scholar-folder-ui-root], [data-scholar-folder-chip], .scholar-folder-overlay')) return true;
+    return !!node.closest?.('[data-scholar-studio-prompts="1"], [data-scholar-studio-action], [' + STUDIO_BUTTONS_HOST_MARKER + '="1"], [' + STUDIO_NOTE_ACTIONS_MARKER + '="1"], [' + STUDIO_NOTE_MENU_ACTION_MARKER + '="1"], [' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"], [' + KORTEX_PDF2PPT_MARKER + '="1"], [data-scholar-folder-ui-root], [data-scholar-folder-chip], .scholar-folder-overlay');
   }
 
   function shouldIgnoreStudioMutations(mutations) {
@@ -3317,7 +3768,7 @@
     try {
       injectStudioPromptLauncher();
       syncStudioButtonsVisibility();
-      syncStudioNoteActions();
+      // 보기 버튼은 소스로 변환/보고서 평가 버튼 옆에만 표시
       syncStudioNoteInlineViewButtons();
       syncStudioNoteMenuActions();
     } finally {
@@ -3414,22 +3865,33 @@
     if (!container) return false;
     const closeBtn = findStudioPromptCloseButton(container);
     const header = findStudioPromptHeader(container, closeBtn);
-    const existing = document.querySelector('[data-scholar-studio-prompts="1"]');
-    if (existing) {
-      if (closeBtn?.parentElement && existing.parentElement !== closeBtn.parentElement) {
-        closeBtn.parentElement.insertBefore(existing, closeBtn);
-      } else if (header && existing.parentElement !== header) {
-        header.appendChild(existing);
-      }
-      return true;
-    }
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = 'prompts';
-    btn.setAttribute('data-scholar-studio-prompts', '1');
-    btn.style.cssText = 'margin-right:12px;padding:6px 10px;border:none;border-radius:8px;background:#334155;color:#e2e8f0;font-size:12px;font-weight:700;cursor:pointer;line-height:1;';
-    btn.addEventListener('click', (e) => {
+    const wrap = document.createElement('span');
+    wrap.setAttribute('data-scholar-studio-prompts', '1');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;gap:8px;margin-right:12px;vertical-align:middle;';
+
+    const assistantBtn = document.createElement('button');
+    assistantBtn.type = 'button';
+    assistantBtn.textContent = 'Assistant';
+    assistantBtn.title = 'Research Assistant \uC0AC\uC774\uB4DC\uBC14 \uC5F4\uAE30';
+    assistantBtn.style.cssText = 'padding:6px 10px;border:1px solid #64748b;border-radius:8px;background:#1e293b;color:#f8fafc;font-size:12px;font-weight:700;cursor:pointer;line-height:1;';
+    assistantBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof toggleSidebarFn === 'function') toggleSidebarFn();
+      else {
+        try {
+          chrome.runtime.sendMessage({ action: 'openResearchAssistantWindow' });
+        } catch (_) {}
+      }
+    });
+
+    const promptsBtn = document.createElement('button');
+    promptsBtn.type = 'button';
+    promptsBtn.textContent = 'prompts';
+    promptsBtn.title = '\uC800\uC7A5\uB41C \uD504\uB86C\uD504\uD2B8';
+    promptsBtn.style.cssText = 'padding:6px 10px;border:none;border-radius:8px;background:#334155;color:#e2e8f0;font-size:12px;font-weight:700;cursor:pointer;line-height:1;';
+    promptsBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       chrome.runtime.sendMessage({ action: 'openPromptsWindow' }, (res) => {
@@ -3437,24 +3899,24 @@
       });
     });
 
+    wrap.appendChild(assistantBtn);
+    wrap.appendChild(promptsBtn);
+
     if (closeBtn?.parentElement) {
-      closeBtn.parentElement.insertBefore(btn, closeBtn);
+      closeBtn.parentElement.insertBefore(wrap, closeBtn);
       return true;
     }
-
     if (header) {
-      header.appendChild(btn);
+      header.appendChild(wrap);
       return true;
     }
-
-    container.prepend(btn);
+    container.prepend(wrap);
     return true;
   }
 // 갱신 루프에 보기 버튼 동기화 포함
   function injectStudioButtons() {
     injectStudioPromptLauncher();
     syncStudioButtonsVisibility();
-    syncStudioNoteActions();
     syncStudioNoteInlineViewButtons();
     syncStudioNoteMenuActions();
     return true;
@@ -3466,7 +3928,10 @@
     bindStudioNoteMenuTracking();
     ensureStudioButtonsObserver();
     injectStudioPromptLauncher();
-    syncStudioNoteActions();
+    try {
+      document.querySelectorAll('[' + STUDIO_NOTE_ACTIONS_MARKER + '="1"]').forEach((el) => el.remove());
+      document.querySelectorAll('[' + STUDIO_NOTE_INLINE_VIEW_MARKER + '="1"]').forEach((el) => el.remove());
+    } catch (_) {}
     syncStudioNoteInlineViewButtons();
     syncStudioNoteMenuActions();
     loadStudioButtonsVisibilityFromStorage();
@@ -3480,11 +3945,68 @@
   initNotebookExitWatcher();
 
   function runScholarNotebookLMInit() {
+    window.__scholarGetNotebookLmTextarea = function () {
+      try {
+        const el = findNotebookLMInput();
+        return el && el.tagName === 'TEXTAREA' ? el : null;
+      } catch (_) {
+        return null;
+      }
+    };
+    window.__scholarShowToast = function (msg) {
+      try {
+        showSavingToast(String(msg || ''));
+        setTimeout(hideSavingToast, 2600);
+      } catch (_) {}
+    };
+
     init();
     try { window.ScholarKortex?.init?.(); } catch (_) {}
-    registerHideMDEditorHeaderStorageListener();
+    SRH.registerHideMDEditorHeaderStorageListener();
     registerStudioButtonsVisibilityStorageListener();
-    tryInitPromptsButton();
+    SRH.tryInitPromptsButton({ getConfiguredToMDUrl, openConfiguredToMD });
+    try {
+      SRH.tryInitLibraryScholarToolbarLoop();
+    } catch (_) {}
+    try {
+      const bootScholarShell = () => {
+        if (!window.ScholarSearchShell || typeof window.ScholarSearchShell.init !== 'function') return;
+        window.ScholarSearchShell.init({
+          dbGetter: function () {
+            try {
+              return window.__scholarRefDbGetter ? window.__scholarRefDbGetter() : null;
+            } catch (_) {
+              return null;
+            }
+          },
+          getEditor: function () {
+            try {
+              return window.__scholarGetNotebookLmTextarea ? window.__scholarGetNotebookLmTextarea() : null;
+            } catch (_) {
+              return null;
+            }
+          },
+          showToast: function (msg) {
+            try {
+              if (window.__scholarShowToast) window.__scholarShowToast(msg);
+            } catch (_) {}
+          },
+          getDocumentBaseUrl: function () {
+            try {
+              return chrome.runtime.getURL('');
+            } catch (_) {
+              return '';
+            }
+          },
+        });
+      };
+      const dbReady = window.__scholarRefDbReady;
+      if (dbReady && typeof dbReady.then === 'function') {
+        dbReady.then(bootScholarShell).catch(bootScholarShell);
+      } else {
+        bootScholarShell();
+      }
+    } catch (_) {}
     setTimeout(initMessageActionButtons, 800);
     setTimeout(() => {
       if (!document.querySelector('[data-scholar-msg-btns-injected="1"]')) {
@@ -3493,6 +4015,16 @@
     }, 2500);
     setTimeout(initStudioButtons, 1000);
     setTimeout(initStudioButtons, 4000);
+    setTimeout(() => {
+      try {
+        window.ScholarNotebookFolderUI?.init?.();
+      } catch (_) {}
+    }, 1300);
+    setTimeout(() => {
+      try {
+        window.ScholarNotebookFolderUI?.init?.();
+      } catch (_) {}
+    }, 4500);
   }
 
   readNotebookLMFeatureEnabled((enabled) => {

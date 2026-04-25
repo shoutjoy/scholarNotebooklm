@@ -24,10 +24,42 @@ const SCHOLAR_PROMPTS = {
 };
 
 const STORAGE_KEYS = { scrappedContent: 'scrappedContent', accumulatedScraps: 'accumulatedScraps', savedConversations: 'savedConversations', promptInput: 'promptInput', theme: 'scholarTheme', savedPrompts: 'savedPrompts', immediateExecute: 'immediateExecute', leftPanelWidth: 'leftPanelWidth', toMDPaste: 'scholarToMDPaste', tomdOpenType: 'tomdOpenType', hideConversationSave: 'hideConversationSave', hideMDEditorHeader: 'hideMDEditorHeader', popupSidebarCompact: 'popupSidebarCompact', hideScholarSlideStudio: 'hideScholarSlideStudio', hideMDProViewerStudio: 'hideMDProViewerStudio', scrapResponseFormat: 'scrapResponseFormat' };
+
+/** 입력창 프롬프트 하단에만 붙이는 학술·인용 보조 문구(비어 있으면 추가하지 않음). */
+const ACADEMIC_SETTING_PROMPT = `~이다와 같은 전문적인 학술적 어조로 답변, 논문의 인용정보를정확하게, 논문에 제시된 이론은 구체적으로 설명하고, 연구절차와 실험에 대한 내용도 상세하게 설명해줘. 연구결과는 통계적 APA기법에 맞추어서 서술하고, 시사점과 결론은 이론에 근거하여 답변해줘`;
+
 const STRICT_CITATION_PROMPT = `[Strict Citation Rule: Source to Footnote]
 1. 매핑 규칙: 원문의 'Source N'을 발견하면 등장 순서대로 [^1], [^2]... 로 치환하여 본문에 표기할 것.
 2. 주석 생성: 답변 최하단에 [^n]: [Source N] "원문 텍스트" 형식의 리스트를 반드시 포함할 것.
 3. 학술적 태깅: 'Source: Source N' 텍스트는 삭제하고, 해당 개념 바로 뒤에 [^n]를 붙여 출처를 명확히 할 것.`;
+
+function collapseRepeatedBlock(text, block) {
+  let t = String(text || '');
+  if (!block) return t;
+  const doubled = [block + '\n\n' + block, block + '\n' + block];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const d of doubled) {
+      while (t.includes(d)) {
+        t = t.split(d).join(block);
+        changed = true;
+      }
+    }
+  }
+  return t;
+}
+
+function collapseScholarPromptFooters(text) {
+  let t = String(text || '');
+  let prev;
+  do {
+    prev = t;
+    t = collapseRepeatedBlock(t, ACADEMIC_SETTING_PROMPT);
+    t = collapseRepeatedBlock(t, STRICT_CITATION_PROMPT);
+  } while (t !== prev);
+  return t;
+}
 
 function getManifestVersion() {
   try {
@@ -199,7 +231,9 @@ async function loadState() {
     const data = await storage.get([STORAGE_KEYS.scrappedContent, STORAGE_KEYS.accumulatedScraps, STORAGE_KEYS.promptInput, STORAGE_KEYS.theme, STORAGE_KEYS.immediateExecute, STORAGE_KEYS.leftPanelWidth, STORAGE_KEYS.tomdOpenType, STORAGE_KEYS.hideConversationSave, STORAGE_KEYS.hideMDEditorHeader, STORAGE_KEYS.popupSidebarCompact, STORAGE_KEYS.hideScholarSlideStudio, STORAGE_KEYS.hideMDProViewerStudio, STORAGE_KEYS.scrapResponseFormat]);
     scrappedContent = data[STORAGE_KEYS.scrappedContent] || '';
     const input = document.getElementById('promptInput');
-    if (input && data[STORAGE_KEYS.promptInput]) input.value = data[STORAGE_KEYS.promptInput];
+    if (input && data[STORAGE_KEYS.promptInput]) {
+      input.value = collapseScholarPromptFooters(data[STORAGE_KEYS.promptInput]);
+    }
     applyTheme(data[STORAGE_KEYS.theme] || 'dark');
     const chk = document.getElementById('chkImmediate');
     if (chk) chk.checked = data[STORAGE_KEYS.immediateExecute] !== false;
@@ -492,20 +526,61 @@ function setPrompt(text) {
   showMessage('프롬프트가 입력창에 설정되었습니다.');
 }
 
+function appendAcademicSettingPrompt() {
+  const input = document.getElementById('promptInput');
+  if (!input) return;
+  let current = collapseScholarPromptFooters(String(input.value || '').trim());
+  if (!current) {
+    showMessage('\uBA3C\uC800 \uC785\uB825\uCC3D\uC5D0 \uBCF8\uBB38 \uD504\uB86C\uD504\uD2B8\uB97C \uC791\uC131\uD55C \uD6C4 \uCD94\uAC00\uD558\uC138\uC694.');
+    input.focus();
+    return;
+  }
+  if (current.includes(ACADEMIC_SETTING_PROMPT)) {
+    input.value = current;
+    input.focus();
+    saveState().catch(() => {});
+    showMessage('\uD559\uC220 \uC11C\uC220 \uC124\uC815 \uBB38\uAD6C\uAC00 \uC774\uBBF8 \uD558\uB2E8\uC5D0 \uD3EC\uD568\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.');
+    return;
+  }
+  input.value = `${current}\n\n${ACADEMIC_SETTING_PROMPT}`;
+  input.focus();
+  saveState().catch(() => {});
+  showMessage('\uD559\uC220 \uC11C\uC220 \uC124\uC815\uC744 \uAE30\uC874 \uD504\uB86C\uD504\uD2B8 \uD558\uB2E8\uC5D0 \uCD94\uAC00\uD588\uC2B5\uB2C8\uB2E4.');
+}
+
+
 function appendCitationPrompt() {
   const input = document.getElementById('promptInput');
   if (!input) return;
-  const current = String(input.value || '').trim();
-  input.value = current ? `${current}\n\n${STRICT_CITATION_PROMPT}` : STRICT_CITATION_PROMPT;
+  let current = collapseScholarPromptFooters(String(input.value || '').trim());
+  if (!current) {
+    showMessage('\uBA3C\uC800 \uC785\uB825\uCC3D\uC5D0 \uBCF8\uBB38 \uD504\uB86C\uD504\uD2B8\uB97C \uC791\uC131\uD55C \uD6C4 \uCD94\uAC00\uD558\uC138\uC694.');
+    input.focus();
+    return;
+  }
+  if (current.includes(STRICT_CITATION_PROMPT)) {
+    input.value = current;
+    input.focus();
+    saveState().catch(() => {});
+    showMessage('\uC778\uC6A9 \uC694\uCCAD \uD504\uB86C\uD504\uD2B8\uAC00 \uC774\uBBF8 \uD558\uB2E8\uC5D0 \uD3EC\uD568\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.');
+    return;
+  }
+  input.value = `${current}\n\n${STRICT_CITATION_PROMPT}`;
   input.focus();
   saveState().catch(() => {});
-  showMessage('인용요청 프롬프트를 하단에 추가했습니다.');
+  showMessage('\uC778\uC6A9 \uC694\uCCAD \uD504\uB86C\uD504\uD2B8\uB97C \uAE30\uC874 \uD504\uB86C\uD504\uD2B8 \uD558\uB2E8\uC5D0 \uCD94\uAC00\uD588\uC2B5\uB2C8\uB2E4.');
 }
 
 async function copyMainPrompt() {
   const input = document.getElementById('promptInput');
-  const text = input ? input.value : '';
-  if (!text) { showMessage('입력된 내용이 없습니다.', 'x'); return; }
+  let text = input ? String(input.value || '') : '';
+  const collapsed = collapseScholarPromptFooters(text);
+  if (input && collapsed !== text) {
+    input.value = collapsed;
+    text = collapsed;
+    saveState().catch(() => {});
+  }
+  if (!text.trim()) { showMessage('입력된 내용이 없습니다.', 'x'); return; }
   copyToClipboard(text);
   saveState();
 
@@ -825,7 +900,11 @@ async function openViewScrapWindow() {
   const content = getCurrentScrapContent();
   if (storage) {
     try {
-      await storage.set({ [STORAGE_KEYS.scrappedContent]: content || scrappedContent });
+      await storage.set({
+        [STORAGE_KEYS.scrappedContent]: content || scrappedContent,
+        viewScrapMemoPanelId: null,
+        viewScrapMemoFingerprint: null,
+      });
     } catch (e) {
       if (String(e).includes('Extension context invalidated')) {
         ensureExtensionContextOrNotify();
@@ -843,7 +922,11 @@ async function openViewScrapInNewWindow() {
   const storage = getStorage();
   if (storage) {
     try {
-      await storage.set({ [STORAGE_KEYS.scrappedContent]: content || scrappedContent });
+      await storage.set({
+        [STORAGE_KEYS.scrappedContent]: content || scrappedContent,
+        viewScrapMemoPanelId: null,
+        viewScrapMemoFingerprint: null,
+      });
     } catch (e) {
       if (String(e).includes('Extension context invalidated')) {
         ensureExtensionContextOrNotify();
@@ -1137,6 +1220,7 @@ function bindEvents() {
       e.stopPropagation();
       if (action === 'generateSlidePrompt') generateSlidePrompt(Number(arg));
       else if (action === 'setExplorePrompt') setExplorePrompt(arg);
+      else if (action === 'appendAcademicSettingPrompt') appendAcademicSettingPrompt();
       else if (action === 'appendCitationPrompt') appendCitationPrompt();
       else if (action === 'copyMainPrompt') copyMainPrompt();
       else if (action === 'initiateScrap') initiateScrap();

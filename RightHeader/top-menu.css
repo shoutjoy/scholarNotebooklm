@@ -1,0 +1,110 @@
+/* NotebookLM 페이지에 주입되는 상단 툴 바(확장 전용) */
+.scholar-rh-top-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  flex-shrink: 0;
+  vertical-align: middle;
+  font-family: inherit;
+}
+
+.scholar-rh-top-menu .scholar-rh-btn {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #94a3b8;
+  background: #334155;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.scholar-rh-top-menu .scholar-rh-btn:hover {
+  background: #475569;
+  color: #e2e8f0;
+}
+
+.scholar-rh-top-menu .scholar-rh-btn:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.scholar-rh-top-menu .scholar-rh-btn[aria-hidden="true"] {
+  display: none;
+}
+
+.scholar-rh-scholar-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-right: 4px;
+  padding-right: 8px;
+  border-right: 1px solid #475569;
+}
+
+.scholar-rh-scholar-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: #1e3a5f;
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.scholar-rh-inline-scholar-query {
+  box-sizing: border-box;
+  width: min(220px, 36vw);
+  min-width: 120px;
+  padding: 5px 8px;
+  font-size: 12px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.scholar-rh-inline-scholar-query::placeholder {
+  color: #64748b;
+}
+
+.scholar-rh-btn--compact {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.scholar-rh-top-menu .scholar-rh-btn--gemini {
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  border-color: #0f766e;
+  color: #ecfeff;
+  font-weight: 700;
+}
+
+.scholar-rh-top-menu .scholar-rh-btn--gemini:hover {
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  border-color: #14b8a6;
+  color: #f0fdfa;
+}
+
+#scholar-rh-library-scholar-host.scholar-rh-top-menu {
+  margin-left: 0;
+  margin-right: 8px;
+  border-right: none;
+  padding-right: 0;
+}
+
+#scholar-rh-library-scholar-host .scholar-rh-scholar-row {
+  border-right: none;
+  padding-right: 0;
+}

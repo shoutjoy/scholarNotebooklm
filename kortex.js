@@ -216,7 +216,7 @@
 
   function teardown() {
     try {
-      document.querySelectorAll('[data-scholar-studio-prompts="1"]').forEach((el) => el.remove());
+      document.querySelectorAll('[data-scholar-studio-prompts="1"], [data-scholar-studio-assistant="1"]').forEach((el) => el.remove());
     } catch (_) {}
     try {
       document.querySelectorAll('[' + KORTEX_STUDIO_PDF2PPT_MARKER + '="1"]').forEach((el) => el.remove());

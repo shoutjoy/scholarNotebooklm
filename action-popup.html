@@ -71,6 +71,68 @@
       background: #334155;
       margin: 10px 0 8px;
     }
+    .row-sub {
+      padding-left: 22px;
+      margin-bottom: 4px;
+    }
+    .row-sub-label {
+      flex: 1;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .scholar-popup-search {
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
+      margin: 6px 0 8px 22px;
+      min-width: 0;
+    }
+    .scholar-popup-search input {
+      flex: 1;
+      min-width: 0;
+      padding: 6px 8px 6px 28px;
+      font-size: 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #f8fafc url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") no-repeat 8px center;
+      color: #0f172a;
+    }
+    .scholar-popup-search input::placeholder {
+      color: #94a3b8;
+    }
+    .scholar-popup-search input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .scholar-popup-search .btn-search-scholar {
+      flex-shrink: 0;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      border: none;
+      border-radius: 8px;
+      background: #7c3aed;
+      color: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .scholar-popup-search .btn-search-scholar:hover:not(:disabled) {
+      background: #6d28d9;
+    }
+    .scholar-popup-search .btn-search-scholar:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .btn-open--gemini {
+      background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+      border-color: #0f766e;
+      color: #ecfeff;
+    }
+    .btn-open--gemini:hover:not(:disabled) {
+      background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+      border-color: #14b8a6;
+      color: #f0fdfa;
+    }
   </style>
 </head>
 <body>
@@ -95,6 +157,33 @@
     <button type="button" class="btn-open" id="btnToggleSidebar" title="NotebookLM 패널">패널</button>
   </div>
   <p class="hint">NotebookLM 페이지에 패널-헤더 버튼 표시 (교면 UI 제거)</p>
+  <div class="scholar-popup-search">
+    <input type="search" id="inpActionPopupScholarQuery" placeholder="Scholar 검색어…" autocomplete="off" aria-label="Google Scholar 검색어" />
+    <button type="button" class="btn-search-scholar" id="btnActionPopupScholarSearch" title="Google Scholar에서 검색">검색</button>
+  </div>
+  <div class="row row-sub">
+    <span class="row-sub-label">Google Scholar 패널</span>
+    <button type="button" class="btn-open" id="btnScholarPanel" title="Scholar Search 패널 열기">열기</button>
+  </div>
+  <div class="row row-sub">
+    <span class="row-sub-label">참고문헌·인용 관리</span>
+    <button type="button" class="btn-open" id="btnScholarRefPopup" title="인용 관리 패널 열기">열기</button>
+  </div>
+  <div class="row row-sub">
+    <span class="row-sub-label">폴더 열기</span>
+    <button type="button" class="btn-open" id="btnScholarFolderManager" title="노트북 폴더 관리 (folder-manager.html)">열기</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="row">
+    <label>
+      <input type="checkbox" id="chkGeminiNotebook" />
+      <span>Gemini 노트북</span>
+    </label>
+    <button type="button" class="btn-open btn-open--gemini" id="btnOpenGeminiNotebook" title="Gemini 노트북 보기">열기</button>
+  </div>
+  <p class="hint">gemini.google.com/notebooks/view 새 창</p>
 
   <div class="divider"></div>
 

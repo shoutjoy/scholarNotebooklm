@@ -1,7 +1,7 @@
 {
     "manifest_version":  3,
-    "name":  "학술도구 어시스턴트 1.3",
-    "version":  "1.3",
+    "name":  "학술도구 어시스턴트 1.4.0",
+    "version":  "1.4.0",
     "description":  "Edge용 NotebookLM 연동 학술 문서 분석, 슬라이드/학습 프롬프트 생성 및 스크랩 관리",
     "permissions":  [
                         "clipboardWrite",
@@ -25,7 +25,7 @@
                                         "48":  "icons/icon48.png",
                                         "128":  "icons/icon128.png"
                                     },
-                   "default_title":  "학술도구 어시스턴트 — 앱 켜기/끄기"
+                   "default_title":  "학술도구 어시스턴트 1.4.0 — 앱 켜기/끄기"
                },
     "icons":  {
                   "128":  "icons/icon128.png"
@@ -50,7 +50,12 @@
                                                            "md_editor/vieweditor-paste.js",
                                                            "md_editor/lib/marked.min.js",
                                                            "md_editor/lib/lucide.min.js",
-                                                           "confirm/confirm.js"
+                                                           "confirm/confirm.js",
+                                                           "RightHeader/top-menu.html",
+                                                           "RightHeader/top-menu.css",
+                                                           "RightHeader/Scholarref/scholarref.css",
+                                                           "RightHeader/Scholarref/scholarsearch-shell.html",
+                                                           "RightHeader/Scholarref/scholarsearch-layout.css"
                                                        ],
                                          "matches":  [
                                                          "https://notebooklm.google.com/*"
@@ -64,6 +69,12 @@
                                             ],
                                 "js":  [
                                            "kortex.js",
+                                           "RightHeader/Scholarref/scholarref.js",
+                                           "RightHeader/Scholarref/scholarref-idb.js",
+                                           "RightHeader/Scholarref/scholarsearch-shell.js",
+                                           "RightHeader/rightheader.js",
+                                           "folder/folder-sync-store.js",
+                                           "folder/folder-library-ui.js",
                                            "content.js"
                                        ],
                                 "run_at":  "document_idle",
